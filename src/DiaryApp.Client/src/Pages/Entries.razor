@@ -1,0 +1,98 @@
+@page "/entries"
+@inject IVideoEntryClient EntryClient
+@inject ISearchClient SearchClient
+@inject ITranscriptionClient TranscriptionClient
+
+<h1>Entries</h1>
+
+<input @bind="_keyword" placeholder="Search by keyword" />
+<button @onclick="Search">Search</button>
+
+@if (_results is null)
+{
+    <p>Loading entries...</p>
+}
+else if (_results.Count == 0)
+{
+    <p>No entries yet.</p>
+}
+else
+{
+    <ul>
+        @foreach (var entry in _results)
+        {
+            <li>
+                <h3>@entry.Title</h3>
+                <p>@entry.StartedAt.ToLocalTime().ToString("f")</p>
+                @if (!string.IsNullOrWhiteSpace(entry.Description))
+                {
+                    <p>@entry.Description</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(entry.Summary))
+                {
+                    <p><em>@entry.Summary</em></p>
+                }
+                @if (entry.Tags.Any())
+                {
+                    <p>Tags: @string.Join(", ", entry.Tags)</p>
+                }
+                <button @onclick="() => LoadTranscript(entry.Id)">Show transcript</button>
+                @if (_transcripts.TryGetValue(entry.Id, out var transcript))
+                {
+                    <details open>
+                        <summary>Transcript</summary>
+                        <p>@transcript</p>
+                    </details>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private string _keyword = string.Empty;
+    private IReadOnlyCollection<VideoEntryDto>? _results;
+    private readonly Dictionary<Guid, string> _transcripts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _results = await EntryClient.ListAsync();
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(_keyword))
+        {
+            _results = await EntryClient.ListAsync();
+        }
+        else
+        {
+            var searchResults = await SearchClient.SearchAsync(new SearchQuery(_keyword, null));
+            var entries = new List<VideoEntryDto>();
+            foreach (var match in searchResults)
+            {
+                var entry = await EntryClient.GetAsync(match.Id);
+                if (entry is not null)
+                {
+                    entries.Add(entry);
+                }
+            }
+
+            _results = entries;
+        }
+    }
+
+    private async Task LoadTranscript(Guid id)
+    {
+        if (_transcripts.ContainsKey(id))
+        {
+            return;
+        }
+
+        var transcript = await TranscriptionClient.GetTranscriptAsync(id);
+        if (!string.IsNullOrWhiteSpace(transcript))
+        {
+            _transcripts[id] = transcript;
+        }
+    }
+}

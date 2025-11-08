@@ -1,0 +1,130 @@
+@page "/"
+@inject IVideoCaptureService VideoCapture
+@inject IVideoEntryClient EntryClient
+
+<h1>Capture a new entry</h1>
+
+<video @ref="_videoRef" playsinline muted></video>
+
+<div>
+    <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
+    <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
+</div>
+
+<EditForm Model="this" OnValidSubmit="SaveEntry">
+    <InputText @bind-Value="_title" placeholder="Entry title" />
+    <InputTextArea @bind-Value="_description" placeholder="Description" rows="3" />
+    <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
+
+    <fieldset>
+        <legend>Automatic processing</legend>
+        <label><InputCheckbox @bind-Value="_autoTranscribe" /> Generate transcript</label>
+        <label><InputCheckbox @bind-Value="_autoSummarize" /> Summarize transcript</label>
+        <label><InputCheckbox @bind-Value="_autoTitle" /> Suggest title</label>
+    </fieldset>
+
+    <button type="submit" disabled="@(!_hasRecording || _isSaving)">Save Entry</button>
+</EditForm>
+
+@if (!string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <p>@_statusMessage</p>
+}
+
+@if (_lastCreated is not null)
+{
+    <section>
+        <h2>Last entry</h2>
+        <p><strong>@_lastCreated.Title</strong></p>
+        @if (!string.IsNullOrWhiteSpace(_lastCreated.Description))
+        {
+            <p>@_lastCreated.Description</p>
+        }
+        @if (_lastCreated.Summary is not null)
+        {
+            <p>@_lastCreated.Summary</p>
+        }
+        @if (_lastCreated.Tags.Any())
+        {
+            <p>Tags: @string.Join(", ", _lastCreated.Tags)</p>
+        }
+    </section>
+}
+
+@code {
+    private ElementReference _videoRef;
+    private bool _isRecording;
+    private bool _hasRecording;
+    private bool _isSaving;
+    private string _title = string.Empty;
+    private string _description = string.Empty;
+    private string _tagInput = string.Empty;
+    private bool _autoTranscribe = true;
+    private bool _autoSummarize = true;
+    private bool _autoTitle = true;
+    private string? _statusMessage;
+    private VideoEntryDto? _lastCreated;
+
+    private async Task StartRecording()
+    {
+        _statusMessage = null;
+        _hasRecording = false;
+        _isRecording = true;
+        await VideoCapture.StartRecordingAsync(_videoRef);
+    }
+
+    private async Task StopRecording()
+    {
+        await VideoCapture.StopRecordingAsync();
+        _isRecording = false;
+        _hasRecording = true;
+    }
+
+    private async Task SaveEntry()
+    {
+        if (!_hasRecording)
+        {
+            _statusMessage = "Record something before saving.";
+            return;
+        }
+
+        _isSaving = true;
+        _statusMessage = "Uploading entry...";
+
+        try
+        {
+            using var recordedStream = await VideoCapture.GetRecordedStreamAsync();
+            if (recordedStream is null)
+            {
+                _statusMessage = "No recording available.";
+                return;
+            }
+
+            recordedStream.Position = 0;
+
+            using var content = new MultipartFormDataContent();
+            var streamContent = new StreamContent(recordedStream);
+            streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("video/webm");
+            var safeTitle = string.IsNullOrWhiteSpace(_title) ? "untitled" : _title;
+            content.Add(streamContent, "file", $"{safeTitle}.webm");
+            content.Add(new StringContent(_title), "title");
+            content.Add(new StringContent(_description ?? string.Empty), "description");
+            content.Add(new StringContent(_tagInput ?? string.Empty), "tags");
+            content.Add(new StringContent(_autoTranscribe.ToString()), "transcribe");
+            content.Add(new StringContent(_autoSummarize.ToString()), "summarize");
+            content.Add(new StringContent(_autoTitle.ToString()), "autoTitle");
+
+            _lastCreated = await EntryClient.CreateAsync(content);
+            _statusMessage = "Entry saved.";
+            _hasRecording = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to save entry: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}
