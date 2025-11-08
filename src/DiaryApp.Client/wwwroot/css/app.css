@@ -81,3 +81,22 @@ video {
     border-radius: 12px;
     background-color: black;
 }
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: #f2dede;
+    color: #000;
+    padding: 0.6rem 1.25rem;
+    box-shadow: 0 -0.5rem 0.5rem rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 1.25rem;
+    top: 0.75rem;
+}

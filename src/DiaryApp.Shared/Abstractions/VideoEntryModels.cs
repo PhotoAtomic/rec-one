@@ -33,7 +33,7 @@ public record StorageOptions
 {
     public const string SectionName = "Storage";
     public string RootDirectory { get; set; } = "/data/entries";
-    public string FileNameFormat { get; set; } = "yyyy-MMM-dd HH:mm:ss - {0}";
+    public string FileNameFormat { get; set; } = "yyyy-MMM-dd HH.mm.ss";
 }
 
 public record TranscriptOptions

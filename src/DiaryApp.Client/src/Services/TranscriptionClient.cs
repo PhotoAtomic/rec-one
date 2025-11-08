@@ -17,6 +17,6 @@ public class TranscriptionClient(HttpClient httpClient) : ITranscriptionClient
         }
 
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<string>(cancellationToken: cancellationToken);
+        return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 }

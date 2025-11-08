@@ -1,9 +1,12 @@
 using System.Linq;
 using DiaryApp.Server.Processing;
+using DiaryApp.Server.Serialization;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.ResponseCompression;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +21,7 @@ builder.Services.AddSingleton<ITranscriptGenerator, TranscriptGenerator>();
 builder.Services.AddSingleton<ISummaryGenerator, SummaryGenerator>();
 builder.Services.AddSingleton<ITitleGenerator, TitleGenerator>();
 builder.Services.AddSingleton<ISearchIndex, InMemorySearchIndex>();
+builder.Services.AddHttpContextAccessor();
 
 var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
 var authenticationConfigured = oidcSection.Exists() && !string.IsNullOrWhiteSpace(oidcSection["Authority"]);
@@ -40,11 +44,31 @@ if (authenticationConfigured)
     builder.Services.AddAuthorization();
 }
 
-builder.Services.AddControllersWithViews();
-builder.Services.AddRazorPages();
+builder.Services.AddControllersWithViews(options =>
+{
+    if (!authenticationConfigured)
+    {
+        options.Filters.Add(new AllowAnonymousFilter());
+    }
+})
+.AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.TypeInfoResolverChain.Insert(0, DiaryAppJsonSerializerContext.Default);
+});
+builder.Services.AddRazorPages(options =>
+{
+    if (!authenticationConfigured)
+    {
+        options.Conventions.AllowAnonymousToFolder("/");
+    }
+});
 builder.Services.AddResponseCompression(opts =>
 {
     opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/octet-stream" });
+});
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, DiaryAppJsonSerializerContext.Default);
 });
 
 var app = builder.Build();

@@ -11,6 +11,8 @@ namespace DiaryApp.Server.Controllers;
 [Route("api/[controller]")]
 public sealed class EntriesController : ControllerBase
 {
+    private const string GetEntryRouteName = "GetEntryById";
+
     private readonly IVideoEntryStore _store;
     private readonly ITranscriptGenerator _transcripts;
     private readonly ISummaryGenerator _summaries;
@@ -38,7 +40,7 @@ public sealed class EntriesController : ControllerBase
     public async Task<ActionResult<IReadOnlyCollection<VideoEntryDto>>> ListAsync(CancellationToken cancellationToken)
         => Ok(await _store.ListAsync(cancellationToken));
 
-    [HttpGet("{id:guid}")]
+    [HttpGet("{id:guid}", Name = GetEntryRouteName)]
     public async Task<ActionResult<VideoEntryDto>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var entry = await _store.GetAsync(id, cancellationToken);
@@ -101,7 +103,7 @@ public sealed class EntriesController : ControllerBase
         await _searchIndex.IndexAsync(entry, cancellationToken);
 
         _logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
-        return CreatedAtAction(nameof(GetAsync), new { id = entry.Id }, entry);
+        return CreatedAtRoute(GetEntryRouteName, new { id = entry.Id }, entry);
     }
 
     [HttpPut("{id:guid}")]
