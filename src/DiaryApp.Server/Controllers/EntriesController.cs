@@ -3,12 +3,14 @@ using System.Linq;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DiaryApp.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public sealed class EntriesController : ControllerBase
 {
     private const string GetEntryRouteName = "GetEntryById";

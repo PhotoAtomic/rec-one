@@ -1,5 +1,43 @@
+@using System.Net.Http.Json
+@using DiaryApp.Shared.Abstractions
+@inject HttpClient Http
+
 <nav class="nav-menu">
-    <NavLink href="/" class="nav-link" Match="NavLinkMatch.All">Record</NavLink>
-    <NavLink href="/entries" class="nav-link">Entries</NavLink>
-    <NavLink href="/settings" class="nav-link">Settings</NavLink>
+    <div class="nav-links">
+        <NavLink href="/" class="nav-link" Match="NavLinkMatch.All">Record</NavLink>
+        <NavLink href="/entries" class="nav-link">Entries</NavLink>
+        <NavLink href="/settings" class="nav-link">Settings</NavLink>
+    </div>
+    <div class="nav-menu-right">
+        @if (_status?.IsAuthenticated == true)
+        {
+            <div class="nav-greeting">Hi, @(_status.Name ?? "there")</div>
+            <a href="/logout" class="nav-link">Logout</a>
+        }
+        else if (_statusLoaded)
+        {
+            <a href="/login" class="nav-link">Login</a>
+        }
+    </div>
 </nav>
+
+@code {
+    private UserStatusDto? _status;
+    private bool _statusLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _status = await Http.GetFromJsonAsync<UserStatusDto>("authentication/status");
+        }
+        catch
+        {
+            _status = new UserStatusDto(false, null);
+        }
+        finally
+        {
+            _statusLoaded = true;
+        }
+    }
+}

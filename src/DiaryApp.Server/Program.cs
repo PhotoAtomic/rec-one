@@ -3,8 +3,10 @@ using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -40,6 +42,8 @@ if (authenticationConfigured)
         options.ClientSecret = oidcSection["ClientSecret"];
         options.ResponseType = oidcSection["ResponseType"] ?? "code";
         options.SaveTokens = true;
+        options.Scope.Add("profile");
+        options.TokenValidationParameters.NameClaimType = "preferred_username";
     });
     builder.Services.AddAuthorization();
 }
@@ -90,7 +94,35 @@ if (authenticationConfigured)
     app.UseAuthorization();
 }
 
-app.MapControllers();
+var controllers = app.MapControllers();
 app.MapFallbackToFile("index.html");
+
+app.MapGet("/authentication/status", (HttpContext context) =>
+{
+    var principal = context.User;
+    var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
+    var name = isAuthenticated ? principal?.Identity?.Name : null;
+    return Results.Json(new UserStatusDto(isAuthenticated, name));
+}).AllowAnonymous();
+
+if (authenticationConfigured)
+{
+    controllers.RequireAuthorization();
+
+    app.MapGet("/login", async (HttpContext context) =>
+    {
+        await context.ChallengeAsync(
+            OpenIdConnectDefaults.AuthenticationScheme,
+            new AuthenticationProperties { RedirectUri = "/" });
+    }).AllowAnonymous();
+
+    app.MapGet("/logout", async (HttpContext context) =>
+    {
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await context.SignOutAsync(
+            OpenIdConnectDefaults.AuthenticationScheme,
+            new AuthenticationProperties { RedirectUri = "/" });
+    }).RequireAuthorization();
+}
 
 app.Run();

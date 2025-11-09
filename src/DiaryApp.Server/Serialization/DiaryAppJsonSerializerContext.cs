@@ -17,6 +17,7 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(VideoEntrySearchResult))]
 [JsonSerializable(typeof(VideoEntrySearchResult[]))]
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntrySearchResult>))]
+[JsonSerializable(typeof(UserStatusDto))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 internal partial class DiaryAppJsonSerializerContext : JsonSerializerContext;

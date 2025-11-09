@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <UserSecretsId>3b13ec37-50b2-4649-a33d-de35827d0dc6</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
