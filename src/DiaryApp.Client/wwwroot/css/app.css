@@ -45,6 +45,23 @@ html, body {
     color: #cddfff;
 }
 
+.login-required {
+    padding: 2rem;
+    margin-top: 2rem;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    text-align: center;
+}
+
+.login-required h1 {
+    margin-bottom: 0.5rem;
+}
+
+.login-required a {
+    color: #8ab4ff;
+    font-weight: 600;
+}
+
 main {
     display: flex;
     justify-content: center;

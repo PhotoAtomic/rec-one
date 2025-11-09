@@ -1,15 +1,26 @@
-@using System.Net.Http.Json
 @using DiaryApp.Shared.Abstractions
-@inject HttpClient Http
+@inject DiaryApp.Client.Services.AuthenticationStatusService AuthStatusService
 
 <nav class="nav-menu">
-    <div class="nav-links">
-        <NavLink href="/" class="nav-link" Match="NavLinkMatch.All">Record</NavLink>
-        <NavLink href="/entries" class="nav-link">Entries</NavLink>
-        <NavLink href="/settings" class="nav-link">Settings</NavLink>
-    </div>
-    <div class="nav-menu-right">
-        @if (_status?.IsAuthenticated == true)
+    @if (!_statusLoaded)
+    {
+        <div class="nav-links"></div>
+    }
+    else if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
+    {
+        <div class="nav-menu-right">
+            <a href="/login" class="nav-link">Login</a>
+        </div>
+    }
+    else
+    {
+        <div class="nav-links">
+            <NavLink href="/" class="nav-link" Match="NavLinkMatch.All">Record</NavLink>
+            <NavLink href="/entries" class="nav-link">Entries</NavLink>
+            <NavLink href="/settings" class="nav-link">Settings</NavLink>
+        </div>
+        <div class="nav-menu-right">
+            @if (_status.IsAuthenticated)
         {
             <div class="nav-greeting">Hi, @(_status.Name ?? "there")</div>
             <a href="/logout" class="nav-link">Logout</a>
@@ -19,25 +30,16 @@
             <a href="/login" class="nav-link">Login</a>
         }
     </div>
+    }
 </nav>
 
 @code {
-    private UserStatusDto? _status;
+    private UserStatusDto _status = new(false, null, false);
     private bool _statusLoaded;
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            _status = await Http.GetFromJsonAsync<UserStatusDto>("authentication/status");
-        }
-        catch
-        {
-            _status = new UserStatusDto(false, null);
-        }
-        finally
-        {
-            _statusLoaded = true;
-        }
+        _status = await AuthStatusService.GetStatusAsync();
+        _statusLoaded = true;
     }
 }

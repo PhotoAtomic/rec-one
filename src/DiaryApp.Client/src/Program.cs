@@ -15,5 +15,6 @@ builder.Services.AddScoped<ITranscriptionClient, TranscriptionClient>();
 builder.Services.AddScoped<ISummaryClient, SummaryClient>();
 builder.Services.AddScoped<ITitleClient, TitleClient>();
 builder.Services.AddScoped<ISearchClient, SearchClient>();
+builder.Services.AddScoped<AuthenticationStatusService>();
 
 await builder.Build().RunAsync();

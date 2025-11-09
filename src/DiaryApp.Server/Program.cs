@@ -102,7 +102,7 @@ app.MapGet("/authentication/status", (HttpContext context) =>
     var principal = context.User;
     var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
     var name = isAuthenticated ? principal?.Identity?.Name : null;
-    return Results.Json(new UserStatusDto(isAuthenticated, name));
+    return Results.Json(new UserStatusDto(isAuthenticated, name, authenticationConfigured));
 }).AllowAnonymous();
 
 if (authenticationConfigured)

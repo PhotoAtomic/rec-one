@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@using DiaryApp.Shared.Abstractions
+@inject DiaryApp.Client.Services.AuthenticationStatusService AuthStatusService
 
 <PageTitle>Video Diary</PageTitle>
 
@@ -6,7 +8,34 @@
     <NavMenu />
     <main>
         <article class="content px-4">
-            @Body
+            @if (!_statusLoaded)
+            {
+                <div class="login-required">
+                    <p>Loading...</p>
+                </div>
+            }
+            else if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
+            {
+                <section class="login-required">
+                    <h1>Authentication Required</h1>
+                    <p>Please <a href="/login">log in</a> to continue using DiaryApp.</p>
+                </section>
+            }
+            else
+            {
+                @Body
+            }
         </article>
     </main>
 </div>
+
+@code {
+    private UserStatusDto _status = new(false, null, false);
+    private bool _statusLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _status = await AuthStatusService.GetStatusAsync();
+        _statusLoaded = true;
+    }
+}
