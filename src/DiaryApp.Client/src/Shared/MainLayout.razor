@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @using DiaryApp.Shared.Abstractions
 @inject DiaryApp.Client.Services.AuthenticationStatusService AuthStatusService
+@inject NavigationManager NavigationManager
 
 <PageTitle>Video Diary</PageTitle>
 
@@ -18,7 +19,13 @@
             {
                 <section class="login-required">
                     <h1>Authentication Required</h1>
-                    <p>We tried to refresh your sign-in silently, but it appears to have expired. Please <a href="/login">log in</a> to continue.</p>
+                    <p>@(_silentRefreshFailed
+                        ? "We tried to refresh your sign-in silently, but it appears to have expired. Please log in to continue."
+                        : "Hold on, we're refreshing your sign-in...")</p>
+                    @if (_silentRefreshFailed)
+                    {
+                        <p><a href="/login">Click here</a> to sign in.</p>
+                    }
                 </section>
             }
             else
@@ -32,6 +39,8 @@
 @code {
     private UserStatusDto _status = new(false, null, false);
     private bool _statusLoaded;
+    private bool _attemptedSilentLogin;
+    private bool _silentRefreshFailed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -39,6 +48,14 @@
         if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
         {
             _status = await AuthStatusService.RefreshAsync();
+            if (!_status.IsAuthenticated && !_attemptedSilentLogin)
+            {
+                _attemptedSilentLogin = true;
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            _silentRefreshFailed = !_status.IsAuthenticated;
         }
         _statusLoaded = true;
     }

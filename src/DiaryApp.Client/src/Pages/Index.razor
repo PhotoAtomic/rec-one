@@ -7,25 +7,28 @@
 
 <h1>Capture a new entry</h1>
 
-<div class="capture-preview">
-    <video class="capture-preview__video" @ref="_videoRef" playsinline muted></video>
-    <div class="recording-monitor" aria-live="off">
-        <span class="recording-monitor__label">Microphone level</span>
-        <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
-            <div class="vu-meter__fill" data-role="vu-fill"></div>
+<section class="capture-panel">
+    <div class="capture-panel__content">
+        <div class="capture-preview">
+            <video class="capture-preview__video" @ref="_videoRef" playsinline muted></video>
+            <div class="recording-monitor" aria-live="off">
+                <span class="recording-monitor__label">Microphone level</span>
+                <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
+                    <div class="vu-meter__fill" data-role="vu-fill"></div>
+                </div>
+            </div>
+        </div>
+        <div class="capture-actions">
+            <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
+            <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
+            <button type="button"
+                    class="secondary"
+                    @onclick="ToggleCaptureMode">
+                @(_captureScreen ? "Use Webcam" : "Capture Screen")
+            </button>
         </div>
     </div>
-</div>
-
-<div class="capture-actions">
-    <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
-    <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
-    <button type="button"
-            class="secondary"
-            @onclick="ToggleCaptureMode">
-        @_captureScreen ? "Use Webcam" : "Capture Screen"
-    </button>
-</div>
+</section>
 
 <EditForm Model="this" OnValidSubmit="SaveEntry">
     <div @ref="_formContainer">
