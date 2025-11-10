@@ -110,10 +110,116 @@ input, textarea {
     margin-bottom: 1rem;
 }
 
+select {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(15, 15, 20, 0.8);
+    color: inherit;
+}
+
 video {
     width: 100%;
     border-radius: 12px;
     background-color: black;
+}
+
+.entry-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.entry-card {
+    padding: 1.5rem;
+    border-radius: 16px;
+    background-color: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.entry-card__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.entry-card__timestamp {
+    margin: 0.25rem 0 0;
+    color: #8ab4ff;
+    font-size: 0.9rem;
+}
+
+.entry-card__tags {
+    color: #cfd8dc;
+    font-size: 0.95rem;
+}
+
+.entry-preview {
+    width: 220px;
+    flex: 0 0 auto;
+}
+
+.preview-button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    cursor: pointer;
+    color: #8ab4ff;
+}
+
+.preview-button__image {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.preview-button__label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.entry-preview__player video {
+    max-width: 220px;
+}
+
+.entry-preview__player .secondary {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.settings-section {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.settings-warning {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 12px;
+    background: rgba(255, 183, 77, 0.1);
+    color: #ffcc80;
 }
 
 #blazor-error-ui {

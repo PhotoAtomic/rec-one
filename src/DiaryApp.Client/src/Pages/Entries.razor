@@ -18,12 +18,18 @@ else if (_results.Count == 0)
 }
 else
 {
-    <ul>
+    <ul class="entry-list">
         @foreach (var entry in _results)
         {
-            <li>
-                <h3>@entry.Title</h3>
-                <p>@entry.StartedAt.ToLocalTime().ToString("f")</p>
+            <li class="entry-card">
+                <div class="entry-card__header">
+                    <div>
+                        <h3>@entry.Title</h3>
+                        <p class="entry-card__timestamp">@entry.StartedAt.ToLocalTime().ToString("f")</p>
+                    </div>
+                    <VideoPreview Entry="entry" PreviewSecond="5" />
+                </div>
+
                 @if (!string.IsNullOrWhiteSpace(entry.Description))
                 {
                     <p>@entry.Description</p>
@@ -34,7 +40,7 @@ else
                 }
                 @if (entry.Tags.Any())
                 {
-                    <p>Tags: @string.Join(", ", entry.Tags)</p>
+                    <p class="entry-card__tags">Tags: @string.Join(", ", entry.Tags)</p>
                 }
                 <button @onclick="() => LoadTranscript(entry.Id)">Show transcript</button>
                 @if (_transcripts.TryGetValue(entry.Id, out var transcript))

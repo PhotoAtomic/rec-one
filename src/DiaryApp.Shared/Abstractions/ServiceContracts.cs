@@ -39,3 +39,9 @@ public interface IVideoCaptureService
     Task StopRecordingAsync();
     Task<Stream?> GetRecordedStreamAsync();
 }
+
+public interface IMediaSettingsClient
+{
+    Task<UserMediaPreferences> GetMediaPreferencesAsync(CancellationToken cancellationToken = default);
+    Task SaveMediaPreferencesAsync(UserMediaPreferences preferences, CancellationToken cancellationToken = default);
+}

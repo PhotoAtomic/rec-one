@@ -12,6 +12,8 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(VideoEntryDto))]
 [JsonSerializable(typeof(VideoEntryDto[]))]
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntryDto>))]
+[JsonSerializable(typeof(UserEntriesDocument))]
+[JsonSerializable(typeof(UserMediaPreferences))]
 [JsonSerializable(typeof(VideoEntryUpdateRequest))]
 [JsonSerializable(typeof(SearchQuery))]
 [JsonSerializable(typeof(VideoEntrySearchResult))]

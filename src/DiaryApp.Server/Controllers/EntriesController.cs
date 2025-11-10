@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace DiaryApp.Server.Controllers;
 
@@ -14,6 +16,7 @@ namespace DiaryApp.Server.Controllers;
 public sealed class EntriesController : ControllerBase
 {
     private const string GetEntryRouteName = "GetEntryById";
+    private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
 
     private readonly IVideoEntryStore _store;
     private readonly ITranscriptGenerator _transcripts;
@@ -154,6 +157,24 @@ public sealed class EntriesController : ControllerBase
         }
 
         return string.IsNullOrWhiteSpace(entry.Title) ? NotFound() : Ok(entry.Title);
+    }
+
+    [HttpGet("{id:guid}/media")]
+    public async Task<IActionResult> GetMediaAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entry = await _store.GetAsync(id, cancellationToken);
+        if (entry is null || string.IsNullOrWhiteSpace(entry.VideoPath) || !System.IO.File.Exists(entry.VideoPath))
+        {
+            return NotFound();
+        }
+
+        if (!ContentTypeProvider.TryGetContentType(entry.VideoPath!, out var contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        var stream = System.IO.File.OpenRead(entry.VideoPath);
+        return File(stream, contentType, enableRangeProcessing: true);
     }
 
     private static VideoEntryUpdateRequest Normalize(VideoEntryUpdateRequest request)

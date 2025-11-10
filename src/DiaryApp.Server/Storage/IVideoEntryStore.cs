@@ -8,4 +8,6 @@ public interface IVideoEntryStore
     Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken);
     Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken);
+    Task<UserMediaPreferences> GetPreferencesAsync(CancellationToken cancellationToken);
+    Task UpdatePreferencesAsync(UserMediaPreferences preferences, CancellationToken cancellationToken);
 }

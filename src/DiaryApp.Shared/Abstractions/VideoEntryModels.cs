@@ -59,3 +59,15 @@ public record TitleGenerationOptions
     public string? Provider { get; set; }
     public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
 }
+
+public record UserMediaPreferences(string? CameraDeviceId, string? MicrophoneDeviceId)
+{
+    public static readonly UserMediaPreferences Default = new(null, null);
+}
+
+public record UserEntriesDocument(
+    IReadOnlyCollection<VideoEntryDto> Entries,
+    UserMediaPreferences Preferences)
+{
+    public static readonly UserEntriesDocument Empty = new(Array.Empty<VideoEntryDto>(), UserMediaPreferences.Default);
+}

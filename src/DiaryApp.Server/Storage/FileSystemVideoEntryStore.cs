@@ -17,6 +17,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, Dictionary<Guid, VideoEntryDto>> _cacheByUser = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, UserMediaPreferences> _preferencesByUser = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _initializedUsers = new(StringComparer.OrdinalIgnoreCase);
     private readonly StorageOptions _options;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -62,7 +63,17 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             startedAt,
             DateTimeOffset.UtcNow);
 
-        await PersistAsync(userSegment, record, cancellationToken);
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var cache = GetOrCreateCache(userSegment);
+            cache[record.Id] = record;
+            await PersistLockedAsync(userSegment, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
         return record;
     }
 
@@ -121,8 +132,41 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     CompletedAt = DateTimeOffset.UtcNow
                 };
                 cache[id] = updated;
-                await PersistAsync(userSegment, updated, cancellationToken);
+                await PersistLockedAsync(userSegment, cancellationToken);
             }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<UserMediaPreferences> GetPreferencesAsync(CancellationToken cancellationToken)
+    {
+        var userSegment = GetCurrentUserSegment();
+        await EnsureInitializedAsync(userSegment, cancellationToken);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            return GetOrCreatePreferences(userSegment);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task UpdatePreferencesAsync(UserMediaPreferences preferences, CancellationToken cancellationToken)
+    {
+        var userSegment = GetCurrentUserSegment();
+        await EnsureInitializedAsync(userSegment, cancellationToken);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            _preferencesByUser[userSegment] = NormalizePreferences(preferences);
+            await PersistLockedAsync(userSegment, cancellationToken);
         }
         finally
         {
@@ -148,28 +192,12 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             var cache = GetOrCreateCache(userSegment);
             var indexFile = GetIndexFile(userSegment);
             Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
-            if (File.Exists(indexFile))
+            var document = await ReadDocumentAsync(indexFile, cancellationToken);
+            foreach (var record in document.Entries)
             {
-                await using var stream = File.Open(indexFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-                VideoEntryDto[] records = Array.Empty<VideoEntryDto>();
-                if (stream.Length > 0)
-                {
-                    try
-                    {
-                        records = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken)
-                            ?? Array.Empty<VideoEntryDto>();
-                    }
-                    catch (JsonException)
-                    {
-                        records = Array.Empty<VideoEntryDto>();
-                    }
-                }
-
-                foreach (var record in records)
-                {
-                    cache[record.Id] = record;
-                }
+                cache[record.Id] = record;
             }
+            _preferencesByUser[userSegment] = document.Preferences;
 
             _initializedUsers.Add(userSegment);
         }
@@ -179,23 +207,80 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
     }
 
-    private async Task PersistAsync(string userSegment, VideoEntryDto record, CancellationToken cancellationToken)
+    private static async Task<UserEntriesDocument> ReadDocumentAsync(string indexFile, CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken);
+        if (!File.Exists(indexFile))
+        {
+            return UserEntriesDocument.Empty;
+        }
+
+        await using var stream = File.Open(indexFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length == 0)
+        {
+            return UserEntriesDocument.Empty;
+        }
+
         try
         {
-            var cache = GetOrCreateCache(userSegment);
-            cache[record.Id] = record;
-            var indexFile = GetIndexFile(userSegment);
-            Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
-            await using var stream = File.Create(indexFile);
-            await JsonSerializer.SerializeAsync(stream, cache.Values.ToArray(), DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken);
+            var document = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
+            return NormalizeDocument(document);
         }
-        finally
+        catch (JsonException)
         {
-            _gate.Release();
+            stream.Position = 0;
+            try
+            {
+                var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken)
+                    ?? Array.Empty<VideoEntryDto>();
+                return new UserEntriesDocument(entries, UserMediaPreferences.Default);
+            }
+            catch (JsonException)
+            {
+                return UserEntriesDocument.Empty;
+            }
         }
     }
+
+    private async Task PersistLockedAsync(string userSegment, CancellationToken cancellationToken)
+    {
+        var cache = GetOrCreateCache(userSegment);
+        var preferences = GetOrCreatePreferences(userSegment);
+        var document = new UserEntriesDocument(cache.Values.ToArray(), preferences);
+        var indexFile = GetIndexFile(userSegment);
+        Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
+        await using var stream = File.Create(indexFile);
+        await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
+    }
+
+    private UserMediaPreferences GetOrCreatePreferences(string userSegment)
+    {
+        if (!_preferencesByUser.TryGetValue(userSegment, out var preferences))
+        {
+            preferences = UserMediaPreferences.Default;
+            _preferencesByUser[userSegment] = preferences;
+        }
+
+        return preferences;
+    }
+
+    private static UserMediaPreferences NormalizePreferences(UserMediaPreferences? preferences)
+    {
+        if (preferences is null)
+        {
+            return UserMediaPreferences.Default;
+        }
+
+        var camera = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId.Trim();
+        var microphone = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId.Trim();
+        return new UserMediaPreferences(camera, microphone);
+    }
+
+    private static UserEntriesDocument NormalizeDocument(UserEntriesDocument? document)
+        => document is null
+            ? UserEntriesDocument.Empty
+            : new UserEntriesDocument(
+                document.Entries ?? Array.Empty<VideoEntryDto>(),
+                NormalizePreferences(document.Preferences));
 
     private Dictionary<Guid, VideoEntryDto> GetOrCreateCache(string userSegment)
     {

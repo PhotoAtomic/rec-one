@@ -1,0 +1,99 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+
+@inject IJSRuntime JsRuntime
+@inject NavigationManager NavigationManager
+
+<div class="entry-preview">
+    @if (_isPlaying)
+    {
+        <div class="entry-preview__player">
+            <video controls autoplay @onended="StopPlaying">
+                <source src="@VideoUrl" />
+                Your browser does not support the video tag.
+            </video>
+            <button type="button" class="secondary" @onclick="StopPlaying">Back to preview</button>
+        </div>
+    }
+    else
+    {
+        <button type="button" class="preview-button" @onclick="PlayVideo">
+            <img @ref="_previewImage"
+                 class="preview-button__image"
+                 alt="@($"{Entry.Title} preview")"
+                 loading="lazy" />
+            <span class="preview-button__label">Play recording</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public VideoEntryDto Entry { get; set; } = default!;
+
+    [Parameter]
+    public double PreviewSecond { get; set; } = 5;
+
+    private ElementReference _previewImage;
+    private IJSObjectReference? _module;
+    private bool _previewRequested;
+    private bool _isPlaying;
+    private Guid _lastEntryId;
+
+    private string VideoUrl => $"{NavigationManager.BaseUri}api/entries/{Entry.Id}/media";
+
+    protected override void OnParametersSet()
+    {
+        if (Entry.Id != _lastEntryId)
+        {
+            _lastEntryId = Entry.Id;
+            _previewRequested = false;
+            _isPlaying = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_previewRequested && !_isPlaying)
+        {
+            _previewRequested = true;
+            await EnsureModuleAsync();
+            try
+            {
+                await _module!.InvokeVoidAsync("generatePreview", _previewImage, VideoUrl, PreviewSecond);
+            }
+            catch
+            {
+                // Preview best-effort; failures are non-fatal.
+            }
+        }
+    }
+
+    private Task PlayVideo()
+    {
+        _previewRequested = false;
+        _isPlaying = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task StopPlaying()
+    {
+        _isPlaying = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task EnsureModuleAsync()
+    {
+        _module ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/videoPreview.js");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.DisposeAsync();
+        }
+    }
+}

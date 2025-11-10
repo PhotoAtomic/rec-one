@@ -1,12 +1,163 @@
 @page "/settings"
+@implements IAsyncDisposable
+@inject IMediaSettingsClient MediaSettingsClient
+@inject IJSRuntime JsRuntime
+@using System.Collections.Generic
+@using System.Linq
+@using Microsoft.JSInterop
 
-<h1>Settings</h1>
-<p>The settings page surfaces configuration options sourced from the server. The skeleton app exposes the following environment driven settings:</p>
-<ul>
-    <li>Storage directory and naming format for entries</li>
-    <li>Transcription provider (API or local sidecar)</li>
-    <li>Summarization provider and model</li>
-    <li>Automatic title generation provider</li>
-    <li>Authentication via OpenID Connect</li>
-</ul>
-<p>Implement server APIs to expose and persist configuration as needed.</p>
+<h1>Recording Settings</h1>
+
+@if (_isLoading)
+{
+    <p>Loading your device preferences...</p>
+}
+else
+{
+    <EditForm Model="_formModel" OnValidSubmit="SavePreferences">
+        <div class="settings-section">
+            <label for="cameraSelect">Preferred webcam</label>
+            <select id="cameraSelect" @bind="_formModel.CameraDeviceId">
+                <option value="">System default</option>
+                @foreach (var camera in _cameras)
+                {
+                    <option value="@camera.DeviceId">@camera.Label</option>
+                }
+            </select>
+        </div>
+
+        <div class="settings-section">
+            <label for="microphoneSelect">Preferred microphone</label>
+            <select id="microphoneSelect" @bind="_formModel.MicrophoneDeviceId">
+                <option value="">System default</option>
+                @foreach (var microphone in _microphones)
+                {
+                    <option value="@microphone.DeviceId">@microphone.Label</option>
+                }
+            </select>
+        </div>
+
+        <div class="settings-actions">
+            <button type="submit" disabled="@_isSaving">Save preferences</button>
+            <button type="button"
+                    class="secondary"
+                    disabled="@_isRefreshingDevices"
+                    @onclick="() => RefreshDevices(true)">Refresh devices</button>
+        </div>
+    </EditForm>
+
+    if (!_deviceAccessGranted)
+    {
+        <p class="settings-warning">
+            We couldn't enumerate your media devices. Please grant the browser permission to use your camera and microphone,
+            then refresh the device list.
+        </p>
+    }
+
+    if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <p>@_statusMessage</p>
+    }
+}
+
+@code
+{
+    private record MediaDeviceInfo(string DeviceId, string Kind, string Label);
+    private sealed class PreferencesModel
+    {
+        public string? CameraDeviceId { get; set; }
+        public string? MicrophoneDeviceId { get; set; }
+    }
+
+    private IJSObjectReference? _mediaDevicesModule;
+    private readonly PreferencesModel _formModel = new();
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isRefreshingDevices;
+    private bool _deviceAccessGranted = true;
+    private string? _statusMessage;
+    private List<MediaDeviceInfo> _cameras = new();
+    private List<MediaDeviceInfo> _microphones = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreferencesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await RefreshDevices();
+        }
+    }
+
+    private async Task LoadPreferencesAsync()
+    {
+        var preferences = await MediaSettingsClient.GetMediaPreferencesAsync();
+        _formModel.CameraDeviceId = NormalizeForInput(preferences.CameraDeviceId);
+        _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
+        _isLoading = false;
+    }
+
+    private async Task RefreshDevices(bool requestPermissions = false)
+    {
+        _isRefreshingDevices = true;
+        _statusMessage = null;
+        try
+        {
+            _mediaDevicesModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/mediaDevices.js");
+            var devices = await _mediaDevicesModule.InvokeAsync<MediaDeviceInfo[]>("listDevices", requestPermissions);
+            _cameras = devices.Where(d => d.Kind == "videoinput").ToList();
+            _microphones = devices.Where(d => d.Kind == "audioinput").ToList();
+            _deviceAccessGranted = devices.Any();
+        }
+        catch (JSException jsEx)
+        {
+            _deviceAccessGranted = false;
+            _statusMessage = $"Unable to read devices: {jsEx.Message}";
+        }
+        finally
+        {
+            _isRefreshingDevices = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePreferences()
+    {
+        _isSaving = true;
+        _statusMessage = null;
+        try
+        {
+            var preferences = new UserMediaPreferences(
+                NormalizeSelection(_formModel.CameraDeviceId),
+                NormalizeSelection(_formModel.MicrophoneDeviceId));
+
+            await MediaSettingsClient.SaveMediaPreferencesAsync(preferences);
+            _statusMessage = "Preferences saved. Future recordings will use the selected devices.";
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to save preferences: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_mediaDevicesModule is not null)
+        {
+            await _mediaDevicesModule.DisposeAsync();
+        }
+    }
+
+    private static string NormalizeForInput(string? value)
+        => string.IsNullOrWhiteSpace(value) || value == "default" ? string.Empty : value;
+
+    private static string? NormalizeSelection(string? value)
+        => string.IsNullOrWhiteSpace(value) || value == "default" ? null : value;
+}
