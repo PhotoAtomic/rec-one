@@ -18,7 +18,7 @@
             {
                 <section class="login-required">
                     <h1>Authentication Required</h1>
-                    <p>Please <a href="/login">log in</a> to continue using DiaryApp.</p>
+                    <p>We tried to refresh your sign-in silently, but it appears to have expired. Please <a href="/login">log in</a> to continue.</p>
                 </section>
             }
             else
@@ -36,6 +36,10 @@
     protected override async Task OnInitializedAsync()
     {
         _status = await AuthStatusService.GetStatusAsync();
+        if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
+        {
+            _status = await AuthStatusService.RefreshAsync();
+        }
         _statusLoaded = true;
     }
 }

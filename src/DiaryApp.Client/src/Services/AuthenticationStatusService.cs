@@ -36,4 +36,11 @@ public sealed class AuthenticationStatusService
 
         return _cachedStatus!;
     }
+
+    public async Task<UserStatusDto> RefreshAsync()
+    {
+        _loaded = false;
+        _cachedStatus = null;
+        return await GetStatusAsync();
+    }
 }

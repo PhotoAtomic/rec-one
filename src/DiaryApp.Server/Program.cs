@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using DiaryApp.Server.Processing;
@@ -20,7 +21,7 @@ builder.Services.AddOptions<TranscriptOptions>().BindConfiguration(TranscriptOpt
 builder.Services.AddOptions<SummaryOptions>().BindConfiguration(SummaryOptions.SectionName);
 builder.Services.AddOptions<TitleGenerationOptions>().BindConfiguration(TitleGenerationOptions.SectionName);
 
-var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
+var keysDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DiaryApp", "keys");
 Directory.CreateDirectory(keysDirectory);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
@@ -37,12 +38,23 @@ var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
 var authenticationConfigured = oidcSection.Exists() && !string.IsNullOrWhiteSpace(oidcSection["Authority"]);
 if (authenticationConfigured)
 {
-    builder.Services.AddAuthentication(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+})
+    .AddCookie(options =>
     {
-        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+        options.Cookie.Name = "DiaryApp.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.IsEssential = true;
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
     })
-    .AddCookie()
     .AddOpenIdConnect(options =>
     {
         options.Authority = oidcSection["Authority"];

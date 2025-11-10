@@ -7,6 +7,7 @@ using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Options;
 
 namespace DiaryApp.Server.Controllers;
 
@@ -24,6 +25,9 @@ public sealed class EntriesController : ControllerBase
     private readonly ITitleGenerator _titles;
     private readonly ISearchIndex _searchIndex;
     private readonly ILogger<EntriesController> _logger;
+    private readonly bool _transcriptionEnabled;
+    private readonly bool _summaryEnabled;
+    private readonly bool _titleGenerationEnabled;
 
     public EntriesController(
         IVideoEntryStore store,
@@ -31,7 +35,10 @@ public sealed class EntriesController : ControllerBase
         ISummaryGenerator summaries,
         ITitleGenerator titles,
         ISearchIndex searchIndex,
-        ILogger<EntriesController> logger)
+        ILogger<EntriesController> logger,
+        IOptions<TranscriptOptions> transcriptOptions,
+        IOptions<SummaryOptions> summaryOptions,
+        IOptions<TitleGenerationOptions> titleOptions)
     {
         _store = store;
         _transcripts = transcripts;
@@ -39,6 +46,9 @@ public sealed class EntriesController : ControllerBase
         _titles = titles;
         _searchIndex = searchIndex;
         _logger = logger;
+        _transcriptionEnabled = transcriptOptions.Value.Enabled && !string.IsNullOrWhiteSpace(transcriptOptions.Value.Provider);
+        _summaryEnabled = summaryOptions.Value.Enabled && !string.IsNullOrWhiteSpace(summaryOptions.Value.Provider);
+        _titleGenerationEnabled = titleOptions.Value.Enabled && !string.IsNullOrWhiteSpace(titleOptions.Value.Provider);
     }
 
     [HttpGet]
@@ -63,42 +73,70 @@ public sealed class EntriesController : ControllerBase
             return BadRequest("Missing recording file");
         }
 
-        var title = form.TryGetValue("title", out var titleValues) ? titleValues.ToString() : "Untitled";
-        var description = form.TryGetValue("description", out var descriptionValues) ? descriptionValues.ToString() : null;
+        var rawTitle = form.TryGetValue("title", out var titleValues) ? titleValues.ToString() : null;
+        var rawDescription = form.TryGetValue("description", out var descriptionValues) ? descriptionValues.ToString() : null;
         var tags = ParseTags(form.TryGetValue("tags", out var tagValues) ? tagValues.ToString() : null);
-        var transcribe = form.TryGetValue("transcribe", out var transcribeValues) && bool.TryParse(transcribeValues, out var t) && t;
-        var summarize = form.TryGetValue("summarize", out var summarizeValues) && bool.TryParse(summarizeValues, out var s) && s;
-        var autoTitle = form.TryGetValue("autoTitle", out var autoTitleValues) && bool.TryParse(autoTitleValues, out var at) && at;
+
+        var userProvidedTitle = !string.IsNullOrWhiteSpace(rawTitle);
+        var normalizedTitle = string.IsNullOrWhiteSpace(rawTitle) ? "Untitled" : rawTitle!.Trim();
+        var normalizedDescription = string.IsNullOrWhiteSpace(rawDescription) ? null : rawDescription!.Trim();
 
         await using var stream = file.OpenReadStream();
-        var baseRequest = Normalize(new VideoEntryUpdateRequest(title, description, null, null, tags));
+        var baseRequest = Normalize(new VideoEntryUpdateRequest(normalizedTitle, normalizedDescription, null, null, tags));
         var entry = await _store.SaveAsync(stream, file.FileName, baseRequest, cancellationToken);
 
         string? transcript = null;
-        string? summary = null;
+        string? generatedSummary = null;
         string? generatedTitle = null;
+        var finalDescription = normalizedDescription;
+        var finalTitle = normalizedTitle;
 
-        if (transcribe)
+        if (_transcriptionEnabled)
         {
             transcript = await _transcripts.GenerateAsync(entry, cancellationToken);
+            if (string.IsNullOrWhiteSpace(transcript))
+            {
+                transcript = null;
+            }
         }
 
-        if (summarize)
+        if (_summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
         {
-            summary = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
+            generatedSummary = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(generatedSummary))
+            {
+                finalDescription = generatedSummary;
+            }
+            else
+            {
+                generatedSummary = null;
+            }
         }
 
-        if (autoTitle)
+        if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(generatedSummary))
         {
-            generatedTitle = await _titles.GenerateTitleAsync(entry, summary, cancellationToken);
+            generatedTitle = await _titles.GenerateTitleAsync(entry, generatedSummary, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(generatedTitle))
+            {
+                finalTitle = generatedTitle;
+            }
+            else
+            {
+                generatedTitle = null;
+            }
         }
 
-        if (transcript is not null || summary is not null || generatedTitle is not null)
+        var descriptionChanged = !string.Equals(
+            finalDescription ?? string.Empty,
+            normalizedDescription ?? string.Empty,
+            StringComparison.Ordinal);
+
+        if (transcript is not null || generatedSummary is not null || generatedTitle is not null || descriptionChanged)
         {
             var updated = Normalize(new VideoEntryUpdateRequest(
-                generatedTitle ?? entry.Title,
-                description,
-                summary,
+                finalTitle,
+                finalDescription,
+                generatedSummary,
                 transcript,
                 tags));
             await _store.UpdateAsync(entry.Id, updated, cancellationToken);

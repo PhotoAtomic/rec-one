@@ -1,15 +1,19 @@
 @page "/"
+@using Microsoft.JSInterop
 @inject IVideoCaptureService VideoCapture
 @inject IVideoEntryClient EntryClient
+@inject IJSRuntime JsRuntime
+@implements IAsyncDisposable
 
 <h1>Capture a new entry</h1>
 
-<video @ref="_videoRef" playsinline muted></video>
-
-<div class="recording-monitor" aria-live="off">
-    <span class="recording-monitor__label">Microphone level</span>
-    <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
-        <div class="vu-meter__fill" data-role="vu-fill"></div>
+<div class="capture-preview">
+    <video class="capture-preview__video" @ref="_videoRef" playsinline muted></video>
+    <div class="recording-monitor" aria-live="off">
+        <span class="recording-monitor__label">Microphone level</span>
+        <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
+            <div class="vu-meter__fill" data-role="vu-fill"></div>
+        </div>
     </div>
 </div>
 
@@ -19,18 +23,13 @@
 </div>
 
 <EditForm Model="this" OnValidSubmit="SaveEntry">
-    <InputText @bind-Value="_title" placeholder="Entry title" />
-    <InputTextArea @bind-Value="_description" placeholder="Description" rows="3" />
+    <div @ref="_formContainer">
+    <input @bind="_title" placeholder="Entry title" @ref="_titleInput" />
+    <textarea @bind="_description" placeholder="Description" rows="3"></textarea>
     <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
 
-    <fieldset>
-        <legend>Automatic processing</legend>
-        <label><InputCheckbox @bind-Value="_autoTranscribe" /> Generate transcript</label>
-        <label><InputCheckbox @bind-Value="_autoSummarize" /> Summarize transcript</label>
-        <label><InputCheckbox @bind-Value="_autoTitle" /> Suggest title</label>
-    </fieldset>
-
     <button type="submit" disabled="@(!_hasRecording || _isSaving)">Save Entry</button>
+    </div>
 </EditForm>
 
 @if (!string.IsNullOrWhiteSpace(_statusMessage))
@@ -40,7 +39,7 @@
 
 @if (_lastCreated is not null)
 {
-    <section>
+    <section @ref="_lastEntryRef">
         <h2>Last entry</h2>
         <p><strong>@_lastCreated.Title</strong></p>
         @if (!string.IsNullOrWhiteSpace(_lastCreated.Description))
@@ -67,11 +66,13 @@
     private string _title = string.Empty;
     private string _description = string.Empty;
     private string _tagInput = string.Empty;
-    private bool _autoTranscribe = true;
-    private bool _autoSummarize = true;
-    private bool _autoTitle = true;
     private string? _statusMessage;
     private VideoEntryDto? _lastCreated;
+    private ElementReference _formContainer;
+    private ElementReference _titleInput;
+    private ElementReference _lastEntryRef;
+    private IJSObjectReference? _uiModule;
+    private bool _pendingScrollToLastEntry;
 
     private async Task StartRecording()
     {
@@ -86,6 +87,8 @@
         await VideoCapture.StopRecordingAsync();
         _isRecording = false;
         _hasRecording = true;
+        await ScrollToFormAsync();
+        await FocusTitleAsync();
     }
 
     private async Task SaveEntry()
@@ -118,11 +121,9 @@
             content.Add(new StringContent(_title), "title");
             content.Add(new StringContent(_description ?? string.Empty), "description");
             content.Add(new StringContent(_tagInput ?? string.Empty), "tags");
-            content.Add(new StringContent(_autoTranscribe.ToString()), "transcribe");
-            content.Add(new StringContent(_autoSummarize.ToString()), "summarize");
-            content.Add(new StringContent(_autoTitle.ToString()), "autoTitle");
 
             _lastCreated = await EntryClient.CreateAsync(content);
+            _pendingScrollToLastEntry = true;
             _statusMessage = "Entry saved.";
             _hasRecording = false;
         }
@@ -133,6 +134,61 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    private async Task ScrollToFormAsync()
+    {
+        if (_formContainer.Context is null)
+        {
+            return;
+        }
+
+        await EnsureUiModuleAsync();
+        await _uiModule!.InvokeVoidAsync("scrollIntoView", _formContainer);
+    }
+
+    private async Task ScrollToLastEntryAsync()
+    {
+        if (_lastEntryRef.Context is null)
+        {
+            return;
+        }
+
+        await EnsureUiModuleAsync();
+        await _uiModule!.InvokeVoidAsync("scrollIntoView", _lastEntryRef);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingScrollToLastEntry)
+        {
+            _pendingScrollToLastEntry = false;
+            await ScrollToLastEntryAsync();
+        }
+    }
+
+    private async Task FocusTitleAsync()
+    {
+        if (_titleInput.Context is null)
+        {
+            return;
+        }
+
+        await EnsureUiModuleAsync();
+        await _uiModule!.InvokeVoidAsync("focusElement", _titleInput);
+    }
+
+    private async Task EnsureUiModuleAsync()
+    {
+        _uiModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/uiHelpers.js");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_uiModule is not null)
+        {
+            await _uiModule.DisposeAsync();
         }
     }
 }

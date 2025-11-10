@@ -5,8 +5,10 @@
 
 <h1>Entries</h1>
 
-<input @bind="_keyword" placeholder="Search by keyword" />
-<button @onclick="Search">Search</button>
+<EditForm Model="this" OnValidSubmit="Search">
+    <input @bind="_keyword" placeholder="Search by keyword" />
+    <button type="submit">Search</button>
+</EditForm>
 
 @if (_results is null)
 {
