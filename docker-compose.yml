@@ -1,0 +1,12 @@
+services:
+  diaryapp:
+    build: .
+    container_name: diaryapp
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Storage__RootDirectory: /data/entries
+    volumes:
+      - ./data:/data/entries
+      - ./keys:/root/.local/share/DiaryApp/keys

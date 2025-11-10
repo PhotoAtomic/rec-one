@@ -2,6 +2,8 @@
 
 A self-hosted, mobile-ready progressive web application for capturing and searching personal video diary entries. The solution uses Blazor WebAssembly (hosted) with Ahead-of-Time (AOT) compilation and is container-ready for Linux deployments.
 
+> **Created entirely with Codex guidance:** every source file in this repository was generated or edited through OpenAI's Codex (via prompt engineering and follow-up debugging instructions). No manual coding took place beyond supplying prompts and reviewing results, aside from a few inline comments in `appsettings.json` to steer configuration. Think of this project as a full demonstration of "vibe coding" an end-to-end app with AI assistance.
+
 ## Project structure
 
 ```
@@ -57,22 +59,52 @@ Access the app at `https://localhost:5001` (or `http://localhost:5000`).
 
 ### Configuration
 
-Key settings live in `DiaryApp.Server/appsettings.json`:
+Key settings live in `DiaryApp.Server/appsettings.json` (or any other ASP.NET Core configuration source). The most important ones are:
 
-- `Storage`: configure the root directory (mapped to a container volume) and filename format (`yyyy-MMM-dd HH-mm-ss - {title}` by default).
-- `Transcription`, `Summaries`, `Titles`: toggle optional automation features and specify provider identifiers or connection details.
-- `Authentication:OIDC`: when populated with `Authority`, `ClientId`, and optional `ClientSecret`, the server enables OpenID Connect authentication with cookie persistence.
+| Section | Key(s) | Description |
+| --- | --- | --- |
+| `Storage` | `RootDirectory`, `FileNameFormat` | Controls where video files and `entries.json` are persisted. Point `RootDirectory` at a mounted host folder (`/data/entries` inside Docker). `FileNameFormat` is a standard .NET date format string used when naming new recordings. |
+| `Authentication:OIDC` | `Authority`, `ClientId`, `ClientSecret`, `ResponseType` | Enables OpenID Connect login when provided. Leave the entire section commented/empty to run anonymously. Every setting can also be supplied through env vars (`Authentication__OIDC__Authority`, etc.). |
+| `Transcription`, `Summaries`, `Titles` | `Enabled`, `Provider`, `Settings` | Toggle the automatic pipelines. When `Enabled` is `true` and the user leaves the field blank, the configured provider is invoked. Use `Settings` to inject provider-specific options (API keys, model names, endpoints). |
+| `Logging` | `LogLevel` | Standard ASP.NET Core logging knobs. |
+
+> **Cookie persistence:** the server stores its data-protection keys under `%LOCALAPPDATA%/DiaryApp/keys` (Linux: `/root/.local/share/DiaryApp/keys`). Mount that path when containerizing so auth cookies survive restarts.
 
 ### Container deployment
 
-Build and run the container image:
+Build the Native AOT-powered image:
 
 ```bash
 docker build -t video-diary .
-docker run -p 8080:8080 -v $(pwd)/data:/data/entries video-diary
 ```
 
-Mount the `/data/entries` volume to persist recordings and metadata.
+Run it with persistent volumes for recordings and encryption keys:
+
+```bash
+docker run ^
+  -p 8080:8080 ^
+  -v "%cd%/data:/data/entries" ^
+  -v "%cd%/keys:/root/.local/share/DiaryApp/keys" ^
+  video-diary
+```
+
+Linux/macOS variant:
+
+```bash
+docker run \
+  -p 8080:8080 \
+  -v "$(pwd)/data:/data/entries" \
+  -v "$(pwd)/keys:/root/.local/share/DiaryApp/keys" \
+  video-diary
+```
+
+A companion `docker-compose.yml` is provided. Customize the host paths or environment overrides as needed, then run:
+
+```bash
+docker compose up --build
+```
+
+To override configuration inside the container, either mount a custom `appsettings.Production.json` or rely on environment variables (`Storage__RootDirectory`, `Authentication__OIDC__Authority`, etc.).
 
 ## Next steps
 
