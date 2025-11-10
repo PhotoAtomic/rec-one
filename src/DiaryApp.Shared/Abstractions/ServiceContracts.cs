@@ -35,7 +35,7 @@ public interface ISearchClient
 
 public interface IVideoCaptureService
 {
-    Task StartRecordingAsync(ElementReference videoElement);
+    Task StartRecordingAsync(ElementReference videoElement, ElementReference? meterElement = null);
     Task StopRecordingAsync();
     Task<Stream?> GetRecordedStreamAsync();
 }

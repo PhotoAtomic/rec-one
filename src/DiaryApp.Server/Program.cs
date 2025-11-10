@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
@@ -6,6 +7,7 @@ using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -17,6 +19,12 @@ builder.Services.AddOptions<StorageOptions>().BindConfiguration(StorageOptions.S
 builder.Services.AddOptions<TranscriptOptions>().BindConfiguration(TranscriptOptions.SectionName);
 builder.Services.AddOptions<SummaryOptions>().BindConfiguration(SummaryOptions.SectionName);
 builder.Services.AddOptions<TitleGenerationOptions>().BindConfiguration(TitleGenerationOptions.SectionName);
+
+var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
+Directory.CreateDirectory(keysDirectory);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
+    .SetApplicationName("DiaryApp");
 
 builder.Services.AddSingleton<IVideoEntryStore, FileSystemVideoEntryStore>();
 builder.Services.AddSingleton<ITranscriptGenerator, TranscriptGenerator>();

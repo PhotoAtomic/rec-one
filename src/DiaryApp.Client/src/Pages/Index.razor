@@ -6,6 +6,13 @@
 
 <video @ref="_videoRef" playsinline muted></video>
 
+<div class="recording-monitor" aria-live="off">
+    <span class="recording-monitor__label">Microphone level</span>
+    <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
+        <div class="vu-meter__fill" data-role="vu-fill"></div>
+    </div>
+</div>
+
 <div>
     <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
     <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
@@ -53,6 +60,7 @@
 
 @code {
     private ElementReference _videoRef;
+    private ElementReference _vuMeterRef;
     private bool _isRecording;
     private bool _hasRecording;
     private bool _isSaving;
@@ -70,7 +78,7 @@
         _statusMessage = null;
         _hasRecording = false;
         _isRecording = true;
-        await VideoCapture.StartRecordingAsync(_videoRef);
+        await VideoCapture.StartRecordingAsync(_videoRef, _vuMeterRef);
     }
 
     private async Task StopRecording()

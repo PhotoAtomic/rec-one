@@ -9,7 +9,7 @@ public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSetti
 {
     private IJSObjectReference? _module;
 
-    public async Task StartRecordingAsync(ElementReference videoElement)
+    public async Task StartRecordingAsync(ElementReference videoElement, ElementReference? meterElement = null)
     {
         _module ??= await jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/videoRecorder.js");
         var preferences = await settingsClient.GetMediaPreferencesAsync();
@@ -18,7 +18,8 @@ public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSetti
             cameraDeviceId = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId,
             microphoneDeviceId = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId
         };
-        await _module.InvokeVoidAsync("startRecording", videoElement, options);
+        var meterRef = meterElement ?? default;
+        await _module.InvokeVoidAsync("startRecording", videoElement, options, meterRef);
     }
 
     public async Task StopRecordingAsync()

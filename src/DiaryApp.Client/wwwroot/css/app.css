@@ -125,6 +125,37 @@ video {
     background-color: black;
 }
 
+.recording-monitor {
+    margin: 1rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.recording-monitor__label {
+    font-size: 0.85rem;
+    color: #cfd8dc;
+}
+
+.vu-meter {
+    width: 100%;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    position: relative;
+}
+
+.vu-meter__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0%;
+    background: linear-gradient(90deg, #4caf50, #ffeb3b, #ff5722);
+    transition: width 0.1s linear;
+}
+
 .entry-list {
     list-style: none;
     padding: 0;
