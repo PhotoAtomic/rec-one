@@ -17,9 +17,14 @@
     </div>
 </div>
 
-<div>
+<div class="capture-actions">
     <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
     <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
+    <button type="button"
+            class="secondary"
+            @onclick="ToggleCaptureMode">
+        @_captureScreen ? "Use Webcam" : "Capture Screen"
+    </button>
 </div>
 
 <EditForm Model="this" OnValidSubmit="SaveEntry">
@@ -68,6 +73,7 @@
     private string _tagInput = string.Empty;
     private string? _statusMessage;
     private VideoEntryDto? _lastCreated;
+    private bool _captureScreen;
     private ElementReference _formContainer;
     private ElementReference _titleInput;
     private ElementReference _lastEntryRef;
@@ -79,7 +85,7 @@
         _statusMessage = null;
         _hasRecording = false;
         _isRecording = true;
-        await VideoCapture.StartRecordingAsync(_videoRef, _vuMeterRef);
+        await VideoCapture.StartRecordingAsync(_videoRef, _vuMeterRef, _captureScreen);
     }
 
     private async Task StopRecording()
@@ -189,6 +195,33 @@
         if (_uiModule is not null)
         {
             await _uiModule.DisposeAsync();
+        }
+    }
+
+    private async Task ToggleCaptureMode()
+    {
+        var nextMode = !_captureScreen;
+        if (_isRecording)
+        {
+            try
+            {
+                await VideoCapture.SwitchCaptureAsync(_videoRef, _vuMeterRef, nextMode);
+                _captureScreen = nextMode;
+                _statusMessage = _captureScreen
+                    ? "Switched to screen capture."
+                    : "Switched to webcam capture.";
+            }
+            catch (Exception ex)
+            {
+                _statusMessage = $"Failed to switch capture mode: {ex.Message}";
+            }
+        }
+        else
+        {
+            _captureScreen = nextMode;
+            _statusMessage = _captureScreen
+                ? "Screen capture enabled. Start recording to capture your display."
+                : "Webcam capture enabled.";
         }
     }
 }

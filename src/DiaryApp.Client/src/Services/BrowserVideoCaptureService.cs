@@ -9,7 +9,7 @@ public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSetti
 {
     private IJSObjectReference? _module;
 
-    public async Task StartRecordingAsync(ElementReference videoElement, ElementReference? meterElement = null)
+    public async Task StartRecordingAsync(ElementReference videoElement, ElementReference? meterElement = null, bool captureScreen = false)
     {
         _module ??= await jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/videoRecorder.js");
         var preferences = await settingsClient.GetMediaPreferencesAsync();
@@ -19,7 +19,24 @@ public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSetti
             microphoneDeviceId = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId
         };
         var meterRef = meterElement ?? default;
-        await _module.InvokeVoidAsync("startRecording", videoElement, options, meterRef);
+        await _module.InvokeVoidAsync("startRecording", videoElement, options, meterRef, captureScreen);
+    }
+
+    public async Task SwitchCaptureAsync(ElementReference videoElement, ElementReference? meterElement = null, bool captureScreen = false)
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        var preferences = await settingsClient.GetMediaPreferencesAsync();
+        var options = new
+        {
+            cameraDeviceId = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId,
+            microphoneDeviceId = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId
+        };
+        var meterRef = meterElement ?? default;
+        await _module.InvokeVoidAsync("switchSource", videoElement, options, meterRef, captureScreen);
     }
 
     public async Task StopRecordingAsync()
