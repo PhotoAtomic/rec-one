@@ -60,9 +60,9 @@ public record TitleGenerationOptions
     public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
 }
 
-public record UserMediaPreferences(string? CameraDeviceId, string? MicrophoneDeviceId)
+public record UserMediaPreferences(string? CameraDeviceId, string? MicrophoneDeviceId, string TranscriptLanguage = "en-US")
 {
-    public static readonly UserMediaPreferences Default = new(null, null);
+    public static readonly UserMediaPreferences Default = new(null, null, "en-US");
 }
 
 public record UserEntriesDocument(

@@ -170,7 +170,35 @@ public sealed class EntriesController : ControllerBase
             return NotFound();
         }
 
-        return string.IsNullOrWhiteSpace(entry.Transcript) ? NotFound() : Ok(entry.Transcript);
+        string? transcript = entry.Transcript;
+        if (_transcriptionEnabled)
+        {
+            var ensuredTranscript = await _transcripts.GenerateAsync(entry, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(ensuredTranscript))
+            {
+                transcript = ensuredTranscript;
+                if (!string.Equals(entry.Transcript ?? string.Empty, ensuredTranscript, StringComparison.Ordinal))
+                {
+                    var updateRequest = Normalize(new VideoEntryUpdateRequest(
+                        entry.Title,
+                        entry.Description,
+                        entry.Summary,
+                        ensuredTranscript,
+                        entry.Tags));
+
+                    await _store.UpdateAsync(entry.Id, updateRequest, cancellationToken);
+                    var updated = await _store.GetAsync(entry.Id, cancellationToken);
+                    if (updated is not null)
+                    {
+                        entry = updated;
+                        transcript = updated.Transcript;
+                        await _searchIndex.IndexAsync(updated, cancellationToken);
+                    }
+                }
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(transcript) ? NotFound() : Ok(transcript);
     }
 
     [HttpGet("{id:guid}/summary")]

@@ -17,7 +17,7 @@
 *.userprefs
 *.webm
 entries.json
-
+**/data/entries/**/*.txt
 # Mono auto generated files
 mono_crash.*
 

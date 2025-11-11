@@ -70,6 +70,32 @@ Key settings live in `DiaryApp.Server/appsettings.json` (or any other ASP.NET Co
 
 > **Cookie persistence:** the server stores its data-protection keys under `%LOCALAPPDATA%/DiaryApp/keys` (Linux: `/root/.local/share/DiaryApp/keys`). Mount that path when containerizing so auth cookies survive restarts.
 
+#### Azure Speech transcription
+
+To enable automatic transcripts backed by Azure AI Speech:
+
+1. Provision a Speech resource and note the primary key plus region (e.g., `westeurope`) or the full Speech-to-Text endpoint (`https://<region>.stt.speech.microsoft.com`).
+2. Update `DiaryApp.Server/appsettings.json` (or environment variables) so the `Transcription` section looks like:
+
+   ```json
+   "Transcription": {
+     "Enabled": true,
+     "Provider": "AzureSpeech",
+     "Settings": {
+       "SpeechKey": "<your-primary-key>",
+       "SpeechRegion": "westeurope",
+       "SpeechToTextEndpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
+       "RecognitionMode": "conversation",
+       "ResponseFormat": "detailed",
+       "FFmpegPath": "/usr/bin"
+     }
+   }
+   ```
+
+   Every setting can be overridden via environment variables such as `Transcription__Settings__SpeechKey`. Install FFmpeg on the host (https://ffmpeg.org/download.html). If `FFmpegPath` is omitted the server searches the system `PATH`; when the executables are missing the transcription request fails with a clear error instead of silently falling back. (The Docker image already ships `/usr/bin/ffmpeg`, so the sample configuration pins that path.) If you provide `SpeechToTextEndpoint`, it must be a WebSocket endpoint (e.g., `wss://<region>.stt.speech.microsoft.com/speech/universal/v2`). Otherwise omit it and the SDK will derive the right host from `SpeechRegion`.
+3. Users can pick their preferred transcript language under **Settings → Transcript language**. The value defaults to `en-US` and is passed to Azure Speech whenever a transcript is generated.
+4. Whenever a video is recorded the server extracts the audio track (FFmpeg → 16kHz WAV), feeds it to the Azure Speech SDK, captures the transcript, and stores it both in the entry metadata and as a sidecar `.txt` file next to the video (same filename, `.txt` extension). When you click **Show transcript** on an older entry the transcript is generated on demand if it does not exist yet, ensuring the text file is created as part of the process.
+
 ### Container deployment
 
 Build the Native AOT-powered image:

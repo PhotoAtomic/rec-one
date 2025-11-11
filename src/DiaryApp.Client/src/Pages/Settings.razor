@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 @inject IMediaSettingsClient MediaSettingsClient
 @inject IJSRuntime JsRuntime
+@using System
 @using System.Collections.Generic
 @using System.Linq
 @using Microsoft.JSInterop
@@ -37,6 +38,17 @@ else
             </select>
         </div>
 
+        <div class="settings-section">
+            <label for="languageSelect">Transcript language</label>
+            <select id="languageSelect" @bind="_formModel.TranscriptLanguage">
+                @foreach (var language in LanguageOptions)
+                {
+                    <option value="@language.Code">@language.DisplayName</option>
+                }
+            </select>
+            <small>This language is sent to Azure Speech so transcripts match your preferred locale.</small>
+        </div>
+
         <div class="settings-actions">
             <button type="submit" disabled="@_isSaving">Save preferences</button>
             <button type="button"
@@ -63,11 +75,155 @@ else
 @code
 {
     private record MediaDeviceInfo(string DeviceId, string Kind, string Label);
+    private record LanguageOption(string Code, string DisplayName);
     private sealed class PreferencesModel
     {
         public string? CameraDeviceId { get; set; }
         public string? MicrophoneDeviceId { get; set; }
+        public string TranscriptLanguage { get; set; } = UserMediaPreferences.Default.TranscriptLanguage;
     }
+
+    private static readonly LanguageOption[] LanguageOptions =
+    [
+        new("af-ZA", "Afrikaans (South Africa)"),
+        new("am-ET", "Amharic (Ethiopia)"),
+        new("ar-AE", "Arabic (United Arab Emirates)"),
+        new("ar-BH", "Arabic (Bahrain)"),
+        new("ar-DZ", "Arabic (Algeria)"),
+        new("ar-EG", "Arabic (Egypt)"),
+        new("ar-IQ", "Arabic (Iraq)"),
+        new("ar-JO", "Arabic (Jordan)"),
+        new("ar-KW", "Arabic (Kuwait)"),
+        new("ar-LB", "Arabic (Lebanon)"),
+        new("ar-LY", "Arabic (Libya)"),
+        new("ar-MA", "Arabic (Morocco)"),
+        new("ar-OM", "Arabic (Oman)"),
+        new("ar-QA", "Arabic (Qatar)"),
+        new("ar-SA", "Arabic (Saudi Arabia)"),
+        new("ar-SY", "Arabic (Syria)"),
+        new("ar-TN", "Arabic (Tunisia)"),
+        new("ar-YE", "Arabic (Yemen)"),
+        new("az-AZ", "Azerbaijani (Azerbaijan)"),
+        new("bg-BG", "Bulgarian (Bulgaria)"),
+        new("bn-BD", "Bangla (Bangladesh)"),
+        new("bn-IN", "Bangla (India)"),
+        new("bs-BA", "Bosnian (Bosnia and Herzegovina)"),
+        new("ca-ES", "Catalan (Spain)"),
+        new("cs-CZ", "Czech (Czechia)"),
+        new("cy-GB", "Welsh (United Kingdom)"),
+        new("da-DK", "Danish (Denmark)"),
+        new("de-AT", "German (Austria)"),
+        new("de-CH", "German (Switzerland)"),
+        new("de-DE", "German (Germany)"),
+        new("el-GR", "Greek (Greece)"),
+        new("en-AU", "English (Australia)"),
+        new("en-CA", "English (Canada)"),
+        new("en-GB", "English (United Kingdom)"),
+        new("en-HK", "English (Hong Kong)"),
+        new("en-IE", "English (Ireland)"),
+        new("en-IN", "English (India)"),
+        new("en-KE", "English (Kenya)"),
+        new("en-NG", "English (Nigeria)"),
+        new("en-NZ", "English (New Zealand)"),
+        new("en-PH", "English (Philippines)"),
+        new("en-SG", "English (Singapore)"),
+        new("en-TZ", "English (Tanzania)"),
+        new("en-US", "English (United States)"),
+        new("en-ZA", "English (South Africa)"),
+        new("es-AR", "Spanish (Argentina)"),
+        new("es-BO", "Spanish (Bolivia)"),
+        new("es-CL", "Spanish (Chile)"),
+        new("es-CO", "Spanish (Colombia)"),
+        new("es-CR", "Spanish (Costa Rica)"),
+        new("es-CU", "Spanish (Cuba)"),
+        new("es-DO", "Spanish (Dominican Republic)"),
+        new("es-EC", "Spanish (Ecuador)"),
+        new("es-ES", "Spanish (Spain)"),
+        new("es-GT", "Spanish (Guatemala)"),
+        new("es-HN", "Spanish (Honduras)"),
+        new("es-MX", "Spanish (Mexico)"),
+        new("es-NI", "Spanish (Nicaragua)"),
+        new("es-PA", "Spanish (Panama)"),
+        new("es-PE", "Spanish (Peru)"),
+        new("es-PR", "Spanish (Puerto Rico)"),
+        new("es-PY", "Spanish (Paraguay)"),
+        new("es-SV", "Spanish (El Salvador)"),
+        new("es-US", "Spanish (United States)"),
+        new("es-UY", "Spanish (Uruguay)"),
+        new("es-VE", "Spanish (Venezuela)"),
+        new("et-EE", "Estonian (Estonia)"),
+        new("eu-ES", "Basque (Spain)"),
+        new("fa-IR", "Persian (Iran)"),
+        new("fi-FI", "Finnish (Finland)"),
+        new("fil-PH", "Filipino (Philippines)"),
+        new("fr-BE", "French (Belgium)"),
+        new("fr-CA", "French (Canada)"),
+        new("fr-CH", "French (Switzerland)"),
+        new("fr-FR", "French (France)"),
+        new("ga-IE", "Irish (Ireland)"),
+        new("gl-ES", "Galician (Spain)"),
+        new("gu-IN", "Gujarati (India)"),
+        new("he-IL", "Hebrew (Israel)"),
+        new("hi-IN", "Hindi (India)"),
+        new("hr-HR", "Croatian (Croatia)"),
+        new("hu-HU", "Hungarian (Hungary)"),
+        new("hy-AM", "Armenian (Armenia)"),
+        new("id-ID", "Indonesian (Indonesia)"),
+        new("is-IS", "Icelandic (Iceland)"),
+        new("it-IT", "Italian (Italy)"),
+        new("ja-JP", "Japanese (Japan)"),
+        new("jv-ID", "Javanese (Indonesia)"),
+        new("ka-GE", "Georgian (Georgia)"),
+        new("kk-KZ", "Kazakh (Kazakhstan)"),
+        new("km-KH", "Khmer (Cambodia)"),
+        new("kn-IN", "Kannada (India)"),
+        new("ko-KR", "Korean (South Korea)"),
+        new("lo-LA", "Lao (Laos)"),
+        new("lt-LT", "Lithuanian (Lithuania)"),
+        new("lv-LV", "Latvian (Latvia)"),
+        new("mk-MK", "Macedonian (North Macedonia)"),
+        new("ml-IN", "Malayalam (India)"),
+        new("mn-MN", "Mongolian (Mongolia)"),
+        new("mr-IN", "Marathi (India)"),
+        new("ms-MY", "Malay (Malaysia)"),
+        new("mt-MT", "Maltese (Malta)"),
+        new("my-MM", "Myanmar (Myanmar)"),
+        new("nb-NO", "Norwegian Bokmål (Norway)"),
+        new("ne-NP", "Nepali (Nepal)"),
+        new("nl-BE", "Dutch (Belgium)"),
+        new("nl-NL", "Dutch (Netherlands)"),
+        new("pl-PL", "Polish (Poland)"),
+        new("ps-AF", "Pashto (Afghanistan)"),
+        new("pt-BR", "Portuguese (Brazil)"),
+        new("pt-PT", "Portuguese (Portugal)"),
+        new("ro-RO", "Romanian (Romania)"),
+        new("ru-RU", "Russian (Russia)"),
+        new("si-LK", "Sinhala (Sri Lanka)"),
+        new("sk-SK", "Slovak (Slovakia)"),
+        new("sl-SI", "Slovenian (Slovenia)"),
+        new("sq-AL", "Albanian (Albania)"),
+        new("sr-RS", "Serbian (Serbia)"),
+        new("su-ID", "Sundanese (Indonesia)"),
+        new("sv-SE", "Swedish (Sweden)"),
+        new("sw-KE", "Swahili (Kenya)"),
+        new("sw-TZ", "Swahili (Tanzania)"),
+        new("ta-IN", "Tamil (India)"),
+        new("ta-LK", "Tamil (Sri Lanka)"),
+        new("ta-MY", "Tamil (Malaysia)"),
+        new("ta-SG", "Tamil (Singapore)"),
+        new("te-IN", "Telugu (India)"),
+        new("th-TH", "Thai (Thailand)"),
+        new("tr-TR", "Turkish (Türkiye)"),
+        new("uk-UA", "Ukrainian (Ukraine)"),
+        new("ur-IN", "Urdu (India)"),
+        new("ur-PK", "Urdu (Pakistan)"),
+        new("uz-UZ", "Uzbek (Uzbekistan)"),
+        new("vi-VN", "Vietnamese (Vietnam)"),
+        new("zh-CN", "Chinese (Mainland)"),
+        new("zh-HK", "Chinese (Hong Kong)"),
+        new("zh-TW", "Chinese (Taiwan)"),
+        new("zu-ZA", "Zulu (South Africa)")
+    ];
 
     private IJSObjectReference? _mediaDevicesModule;
     private readonly PreferencesModel _formModel = new();
@@ -97,6 +253,7 @@ else
         var preferences = await MediaSettingsClient.GetMediaPreferencesAsync();
         _formModel.CameraDeviceId = NormalizeForInput(preferences.CameraDeviceId);
         _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
+        _formModel.TranscriptLanguage = NormalizeLanguageForInput(preferences.TranscriptLanguage);
         _isLoading = false;
     }
 
@@ -132,7 +289,8 @@ else
         {
             var preferences = new UserMediaPreferences(
                 NormalizeSelection(_formModel.CameraDeviceId),
-                NormalizeSelection(_formModel.MicrophoneDeviceId));
+                NormalizeSelection(_formModel.MicrophoneDeviceId),
+                NormalizeLanguageSelection(_formModel.TranscriptLanguage));
 
             await MediaSettingsClient.SaveMediaPreferencesAsync(preferences);
             _statusMessage = "Preferences saved. Future recordings will use the selected devices.";
@@ -160,4 +318,20 @@ else
 
     private static string? NormalizeSelection(string? value)
         => string.IsNullOrWhiteSpace(value) || value == "default" ? null : value;
+
+    private static string NormalizeLanguageForInput(string? code)
+        => string.IsNullOrWhiteSpace(code) ? UserMediaPreferences.Default.TranscriptLanguage : code;
+
+    private static string NormalizeLanguageSelection(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return UserMediaPreferences.Default.TranscriptLanguage;
+        }
+
+        var normalized = code.Trim();
+        return LanguageOptions.Any(option => string.Equals(option.Code, normalized, StringComparison.OrdinalIgnoreCase))
+            ? normalized
+            : UserMediaPreferences.Default.TranscriptLanguage;
+    }
 }

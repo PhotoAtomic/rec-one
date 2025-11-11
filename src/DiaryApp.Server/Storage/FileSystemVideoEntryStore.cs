@@ -197,7 +197,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             {
                 cache[record.Id] = record;
             }
-            _preferencesByUser[userSegment] = document.Preferences;
+            _preferencesByUser[userSegment] = NormalizePreferences(document.Preferences);
 
             _initializedUsers.Add(userSegment);
         }
@@ -272,7 +272,8 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         var camera = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId.Trim();
         var microphone = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId.Trim();
-        return new UserMediaPreferences(camera, microphone);
+        var language = NormalizeLanguage(preferences.TranscriptLanguage);
+        return new UserMediaPreferences(camera, microphone, language);
     }
 
     private static UserEntriesDocument NormalizeDocument(UserEntriesDocument? document)
@@ -281,6 +282,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             : new UserEntriesDocument(
                 document.Entries ?? Array.Empty<VideoEntryDto>(),
                 NormalizePreferences(document.Preferences));
+
+    private static string NormalizeLanguage(string? language)
+        => string.IsNullOrWhiteSpace(language)
+            ? UserMediaPreferences.Default.TranscriptLanguage
+            : language.Trim();
 
     private Dictionary<Guid, VideoEntryDto> GetOrCreateCache(string userSegment)
     {
