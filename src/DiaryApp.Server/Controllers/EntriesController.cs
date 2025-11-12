@@ -173,6 +173,11 @@ public sealed class EntriesController : ControllerBase
         var transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken);
         if (!string.IsNullOrWhiteSpace(transcript))
         {
+            var summarized = await TrySummarizeFromTranscriptAsync(entry, transcript, cancellationToken);
+            if (summarized is not null)
+            {
+                await _searchIndex.IndexAsync(summarized with { Transcript = transcript }, cancellationToken);
+            }
             return Ok(transcript);
         }
 
@@ -187,7 +192,8 @@ public sealed class EntriesController : ControllerBase
             return NotFound();
         }
 
-        await _searchIndex.IndexAsync(entry with { Transcript = ensuredTranscript }, cancellationToken);
+        var updatedEntry = await TrySummarizeFromTranscriptAsync(entry, ensuredTranscript, cancellationToken) ?? entry;
+        await _searchIndex.IndexAsync(updatedEntry with { Transcript = ensuredTranscript }, cancellationToken);
         return Ok(ensuredTranscript);
     }
 
@@ -249,4 +255,36 @@ public sealed class EntriesController : ControllerBase
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+    private async Task<VideoEntryDto?> TrySummarizeFromTranscriptAsync(
+        VideoEntryDto entry,
+        string transcript,
+        CancellationToken cancellationToken)
+    {
+        if (!_summaryEnabled || string.IsNullOrWhiteSpace(transcript))
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.Description))
+        {
+            return null;
+        }
+
+        var summary = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return null;
+        }
+
+        var updateRequest = Normalize(new VideoEntryUpdateRequest(
+            entry.Title,
+            summary,
+            null,
+            transcript,
+            entry.Tags));
+
+        await _store.UpdateAsync(entry.Id, updateRequest, cancellationToken);
+        return await _store.GetAsync(entry.Id, cancellationToken);
+    }
 }

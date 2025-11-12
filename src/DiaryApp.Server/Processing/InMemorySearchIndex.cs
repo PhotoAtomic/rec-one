@@ -47,6 +47,7 @@ public sealed class InMemorySearchIndex : ISearchIndex
                 (!string.IsNullOrWhiteSpace(entry.Title) && entry.Title.ToLowerInvariant().Contains(keyword)) ||
                 (!string.IsNullOrWhiteSpace(entry.Description) && entry.Description.ToLowerInvariant().Contains(keyword)) ||
                 (!string.IsNullOrWhiteSpace(entry.Transcript) && entry.Transcript.ToLowerInvariant().Contains(keyword)))
+            .OrderByDescending(entry => entry.StartedAt)
             .Select(entry => new VideoEntrySearchResult(entry.Id, entry.Title, entry.Description, 1.0))
             .ToArray();
 
