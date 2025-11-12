@@ -18,6 +18,7 @@
 *.webm
 entries.json
 **/data/entries/**/*.txt
+/keys/**/*
 # Mono auto generated files
 mono_crash.*
 
