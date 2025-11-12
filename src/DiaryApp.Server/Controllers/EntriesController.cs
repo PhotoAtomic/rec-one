@@ -89,7 +89,6 @@ public sealed class EntriesController : ControllerBase
         string? generatedTitle = null;
         var finalDescription = normalizedDescription;
         var finalTitle = normalizedTitle;
-        var descriptionFromGenerator = false;
 
         if (_transcriptionEnabled)
         {
@@ -106,11 +105,10 @@ public sealed class EntriesController : ControllerBase
             if (!string.IsNullOrWhiteSpace(generatedDescription))
             {
                 finalDescription = generatedDescription;
-                descriptionFromGenerator = true;
             }
         }
 
-        if (_titleGenerationEnabled && !userProvidedTitle && descriptionFromGenerator && !string.IsNullOrWhiteSpace(finalDescription))
+        if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(finalDescription))
         {
             generatedTitle = await _titles.GenerateTitleAsync(entry, finalDescription, cancellationToken);
             if (!string.IsNullOrWhiteSpace(generatedTitle))
