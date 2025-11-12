@@ -20,6 +20,7 @@
         <button type="button" class="preview-button" @onclick="PlayVideo">
             <img @ref="_previewImage"
                  class="preview-button__image"
+                 src="@_previewImageSource"
                  alt="@($"{Entry.Title} preview")"
                  loading="lazy" />
             <span class="preview-button__label">Play recording</span>
@@ -39,8 +40,10 @@
     private bool _previewRequested;
     private bool _isPlaying;
     private Guid _lastEntryId;
+    private string _previewImageSource = PlaceholderImage;
 
     private string VideoUrl => $"{NavigationManager.BaseUri}api/entries/{Entry.Id}/media";
+    private const string PlaceholderImage = "images/preview-placeholder.svg";
 
     protected override void OnParametersSet()
     {
@@ -49,6 +52,7 @@
             _lastEntryId = Entry.Id;
             _previewRequested = false;
             _isPlaying = false;
+            _previewImageSource = PlaceholderImage;
         }
     }
 

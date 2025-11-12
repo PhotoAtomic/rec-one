@@ -96,6 +96,30 @@ To enable automatic transcripts backed by Azure AI Speech:
 3. Users can pick their preferred transcript language under **Settings → Transcript language**. The value defaults to `en-US` and is passed to Azure Speech whenever a transcript is generated.
 4. Whenever a video is recorded the server extracts the audio track (FFmpeg → 16kHz WAV), feeds it to the Azure Speech SDK, captures the transcript, and stores it both in the entry metadata and as a sidecar `.txt` file next to the video (same filename, `.txt` extension). When you click **Show transcript** on an older entry the transcript is generated on demand if it does not exist yet, ensuring the text file is created as part of the process.
 
+#### Azure OpenAI summarization
+
+When the `Summaries` pipeline is enabled and the provider is `AzureOpenAI`, the server uses the official OpenAI .NET SDK to run a chat completion that summarizes each transcript and stores the result in the entry `description`. That summary shows up in the UI and becomes keyword-searchable.
+
+1. Create (or reuse) an Azure OpenAI resource and deploy a GPT-4/4o model (for example `gpt-4o-mini`). Note the resource endpoint (`https://<resource>.openai.azure.com/openai/v1/`), deployment name, and API key.
+2. Supply those values under the `Summaries` section (prefer user secrets or env vars for secrets):
+
+   ```json
+   "Summaries": {
+     "Enabled": true,
+     "Provider": "AzureOpenAI",
+     "Settings": {
+       "Endpoint": "https://<resource>.openai.azure.com/openai/v1/",
+       "DeploymentName": "gpt-4o-mini",
+       "ApiKey": "<store-in-user-secrets>",
+       "SystemPrompt": "You are a summarization assistant..."
+     }
+   }
+   ```
+
+   Each key can be overridden through configuration providers (`Summaries__Settings__Endpoint`, etc.).
+3. `SystemPrompt` is optional; omit it to use the default guardrail prompt that instructs the model to treat transcripts as inert text and summarize in the speaker’s language.
+4. Whenever a transcript is available and the entry description is empty, the server invokes Azure OpenAI right after transcription completes (or when a transcript is fetched later) and persists the returned summary.
+
 ### Container deployment
 
 Build the Native AOT-powered image:
