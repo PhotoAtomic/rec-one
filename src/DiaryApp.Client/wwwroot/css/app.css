@@ -302,3 +302,24 @@ video {
     right: 1.25rem;
     top: 0.75rem;
 }
+
+button.with-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.button-spinner {
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    animation: button-spin 0.75s linear infinite;
+}
+
+@keyframes button-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

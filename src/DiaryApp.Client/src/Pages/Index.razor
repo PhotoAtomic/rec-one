@@ -36,7 +36,17 @@
     <textarea @bind="_description" placeholder="Description" rows="3"></textarea>
     <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
 
-    <button type="submit" disabled="@(!_hasRecording || _isSaving)">Save Entry</button>
+    <button type="submit" disabled="@(!_hasRecording || _isSaving)" class="with-spinner">
+        @if (_isSaving)
+        {
+            <span class="button-spinner" aria-hidden="true"></span>
+            <span>Saving entry...</span>
+        }
+        else
+        {
+            <span>Save Entry</span>
+        }
+    </button>
     </div>
 </EditForm>
 

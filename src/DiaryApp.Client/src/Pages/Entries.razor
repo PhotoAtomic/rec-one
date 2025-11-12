@@ -44,7 +44,19 @@ else
                 {
                     <p class="entry-card__tags">Tags: @string.Join(", ", entry.Tags)</p>
                 }
-                <button @onclick="() => LoadTranscript(entry.Id)">Show transcript</button>
+                <button class="with-spinner"
+                        @onclick="() => LoadTranscript(entry.Id)"
+                        disabled="@IsTranscriptLoading(entry.Id)">
+                    @if (IsTranscriptLoading(entry.Id))
+                    {
+                        <span class="button-spinner" aria-hidden="true"></span>
+                        <span>Loading transcript...</span>
+                    }
+                    else
+                    {
+                        <span>Show transcript</span>
+                    }
+                </button>
                 @if (_transcripts.TryGetValue(entry.Id, out var transcript))
                 {
                     <details open>
@@ -61,6 +73,7 @@ else
     private string _keyword = string.Empty;
     private IReadOnlyCollection<VideoEntryDto>? _results;
     private readonly Dictionary<Guid, string> _transcripts = new();
+    private readonly HashSet<Guid> _loadingTranscripts = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -92,15 +105,24 @@ else
 
     private async Task LoadTranscript(Guid id)
     {
-        if (_transcripts.ContainsKey(id))
+        if (_transcripts.ContainsKey(id) || !_loadingTranscripts.Add(id))
         {
             return;
         }
 
-        var transcript = await TranscriptionClient.GetTranscriptAsync(id);
-        if (!string.IsNullOrWhiteSpace(transcript))
+        try
         {
-            _transcripts[id] = transcript;
+            var transcript = await TranscriptionClient.GetTranscriptAsync(id);
+            if (!string.IsNullOrWhiteSpace(transcript))
+            {
+                _transcripts[id] = transcript;
+            }
+        }
+        finally
+        {
+            _loadingTranscripts.Remove(id);
         }
     }
+
+    private bool IsTranscriptLoading(Guid id) => _loadingTranscripts.Contains(id);
 }
