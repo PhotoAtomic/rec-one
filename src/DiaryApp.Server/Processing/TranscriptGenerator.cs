@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,20 +57,15 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
         }
 
         var transcriptLanguage = await ResolveTranscriptLanguageAsync(cancellationToken);
-        var transcriptPath = GetTranscriptPath(entry.VideoPath);
+        var transcriptPath = TranscriptFileStore.GetTranscriptPath(entry.VideoPath);
         var fileLock = FileLocks.GetOrAdd(transcriptPath, static _ => new SemaphoreSlim(1, 1));
         await fileLock.WaitAsync(cancellationToken);
         try
         {
-            if (File.Exists(transcriptPath))
+            var existingTranscript = await TranscriptFileStore.ReadTranscriptByPathAsync(transcriptPath, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(existingTranscript))
             {
-                return await File.ReadAllTextAsync(transcriptPath, cancellationToken);
-            }
-
-            if (!string.IsNullOrWhiteSpace(entry.Transcript))
-            {
-                await WriteTranscriptAsync(transcriptPath, entry.Transcript, cancellationToken);
-                return entry.Transcript;
+                return existingTranscript;
             }
 
             var provider = _options.Provider;
@@ -78,7 +74,7 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
                 var transcript = await GenerateWithAzureSpeechAsync(entry.VideoPath, transcriptLanguage, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(transcript))
                 {
-                    await WriteTranscriptAsync(transcriptPath, transcript, cancellationToken);
+                    await TranscriptFileStore.WriteTranscriptByPathAsync(transcriptPath, transcript, cancellationToken);
                 }
                 return transcript;
             }
@@ -204,10 +200,68 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
         using var audioConfig = AudioConfig.FromWavFileInput(wavFile);
         using var recognizer = new SpeechRecognizer(speechConfig, audioConfig);
 
-        SpeechRecognitionResult result;
+        var recognizedSegments = new List<string>();
+        var recognitionCompleted = new TaskCompletionSource<RecognitionCompletion>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loggedNoMatch = false;
+
+        recognizer.Recognized += (_, args) =>
+        {
+            switch (args.Result.Reason)
+            {
+                case ResultReason.RecognizedSpeech when !string.IsNullOrWhiteSpace(args.Result.Text):
+                    lock (recognizedSegments)
+                    {
+                        recognizedSegments.Add(args.Result.Text.Trim());
+                    }
+                    break;
+                case ResultReason.NoMatch when !loggedNoMatch:
+                    loggedNoMatch = true;
+                    _logger.LogWarning("Azure Speech could not recognize part of {AudioFile}.", wavFile);
+                    break;
+            }
+        };
+
+        recognizer.Canceled += (_, args) =>
+        {
+            if (args.Reason == CancellationReason.Error)
+            {
+                _logger.LogError(
+                    "Azure Speech canceled recognition for {AudioFile}. Error: {Details}",
+                    wavFile,
+                    args.ErrorDetails);
+                recognitionCompleted.TrySetResult(new RecognitionCompletion(ResultReason.Canceled, CancellationReason.Error));
+                return;
+            }
+
+            if (args.Reason == CancellationReason.EndOfStream)
+            {
+                recognitionCompleted.TrySetResult(new RecognitionCompletion(ResultReason.RecognizedSpeech, CancellationReason.EndOfStream));
+                return;
+            }
+
+            _logger.LogWarning(
+                "Azure Speech canceled recognition for {AudioFile}. Reason: {Reason}",
+                wavFile,
+                args.Reason);
+            recognitionCompleted.TrySetResult(new RecognitionCompletion(ResultReason.Canceled, args.Reason));
+        };
+
+        recognizer.SessionStopped += (_, _) =>
+            recognitionCompleted.TrySetResult(new RecognitionCompletion(ResultReason.RecognizedSpeech, null));
+
+        using var cancellationRegistration =
+            cancellationToken.Register(() => recognitionCompleted.TrySetCanceled(cancellationToken));
+
         try
         {
-            result = await recognizer.RecognizeOnceAsync().WaitAsync(cancellationToken);
+            await recognizer.StartContinuousRecognitionAsync().WaitAsync(cancellationToken);
+            var completion = await recognitionCompleted.Task.WaitAsync(cancellationToken);
+
+            if (completion.ResultReason == ResultReason.Canceled &&
+                completion.CancellationReason == CancellationReason.Error)
+            {
+                return null;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -218,50 +272,28 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
             _logger.LogError(ex, "Azure Speech SDK invocation failed for {AudioFile}.", wavFile);
             return null;
         }
-
-        switch (result.Reason)
+        finally
         {
-            case ResultReason.RecognizedSpeech:
-                return string.IsNullOrWhiteSpace(result.Text) ? null : result.Text;
-            case ResultReason.NoMatch:
-                _logger.LogWarning("Azure Speech could not recognize any speech in {AudioFile}.", wavFile);
-                return null;
-            case ResultReason.Canceled:
-                var cancellation = CancellationDetails.FromResult(result);
-                if (cancellation.Reason == CancellationReason.Error)
-                {
-                    _logger.LogError(
-                        "Azure Speech canceled recognition for {AudioFile}. Error: {Details}",
-                        wavFile,
-                        cancellation.ErrorDetails);
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Azure Speech canceled recognition for {AudioFile}. Reason: {Reason}",
-                        wavFile,
-                        cancellation.Reason);
-                }
-                return null;
-            default:
-                _logger.LogWarning("Azure Speech returned unexpected result ({Reason}) for {AudioFile}.", result.Reason, wavFile);
-                return null;
-        }
-    }
-
-    private static async Task WriteTranscriptAsync(string transcriptPath, string transcript, CancellationToken cancellationToken)
-    {
-        var directory = Path.GetDirectoryName(transcriptPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
+            try
+            {
+                await recognizer.StopContinuousRecognitionAsync();
+            }
+            catch (Exception stopEx)
+            {
+                _logger.LogDebug(stopEx, "Failed to stop Azure Speech recognizer cleanly for {AudioFile}.", wavFile);
+            }
         }
 
-        await File.WriteAllTextAsync(transcriptPath, transcript, cancellationToken);
+        string transcript;
+        lock (recognizedSegments)
+        {
+            transcript = string.Join(' ', recognizedSegments);
+        }
+
+        return string.IsNullOrWhiteSpace(transcript) ? null : transcript;
     }
 
-    private static string GetTranscriptPath(string videoPath)
-        => Path.ChangeExtension(videoPath, ".txt") ?? $"{videoPath}.txt";
+    private sealed record RecognitionCompletion(ResultReason ResultReason, CancellationReason? CancellationReason);
 
     private sealed class AzureSpeechSettings
     {

@@ -18,10 +18,18 @@ public sealed class InMemorySearchIndex : ISearchIndex
         _store = store;
     }
 
-    public Task IndexAsync(VideoEntryDto entry, CancellationToken cancellationToken)
+    public async Task IndexAsync(VideoEntryDto entry, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(entry.Transcript) && !string.IsNullOrWhiteSpace(entry.VideoPath))
+        {
+            var transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(transcript))
+            {
+                entry = entry with { Transcript = transcript };
+            }
+        }
+
         _entries[entry.Id] = entry;
-        return Task.CompletedTask;
     }
 
     public async Task<IReadOnlyCollection<VideoEntrySearchResult>> SearchAsync(SearchQuery query, CancellationToken cancellationToken)
@@ -37,9 +45,9 @@ public sealed class InMemorySearchIndex : ISearchIndex
         var matches = _entries.Values
             .Where(entry =>
                 (!string.IsNullOrWhiteSpace(entry.Title) && entry.Title.ToLowerInvariant().Contains(keyword)) ||
-                (!string.IsNullOrWhiteSpace(entry.Summary) && entry.Summary.ToLowerInvariant().Contains(keyword)) ||
+                (!string.IsNullOrWhiteSpace(entry.Description) && entry.Description.ToLowerInvariant().Contains(keyword)) ||
                 (!string.IsNullOrWhiteSpace(entry.Transcript) && entry.Transcript.ToLowerInvariant().Contains(keyword)))
-            .Select(entry => new VideoEntrySearchResult(entry.Id, entry.Title, entry.Summary, 1.0))
+            .Select(entry => new VideoEntrySearchResult(entry.Id, entry.Title, entry.Description, 1.0))
             .ToArray();
 
         return matches;
@@ -63,7 +71,17 @@ public sealed class InMemorySearchIndex : ISearchIndex
             var existingEntries = await _store.ListAsync(cancellationToken);
             foreach (var entry in existingEntries)
             {
-                _entries[entry.Id] = entry;
+                var hydrated = entry;
+                if (!string.IsNullOrWhiteSpace(entry.VideoPath))
+                {
+                    var transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(transcript))
+                    {
+                        hydrated = entry with { Transcript = transcript };
+                    }
+                }
+
+                _entries[hydrated.Id] = hydrated;
             }
 
             _initialized = true;

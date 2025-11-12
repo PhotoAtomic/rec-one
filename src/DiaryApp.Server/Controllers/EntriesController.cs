@@ -86,10 +86,10 @@ public sealed class EntriesController : ControllerBase
         var entry = await _store.SaveAsync(stream, file.FileName, baseRequest, cancellationToken);
 
         string? transcript = null;
-        string? generatedSummary = null;
         string? generatedTitle = null;
         var finalDescription = normalizedDescription;
         var finalTitle = normalizedTitle;
+        var descriptionFromGenerator = false;
 
         if (_transcriptionEnabled)
         {
@@ -102,20 +102,17 @@ public sealed class EntriesController : ControllerBase
 
         if (_summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
         {
-            generatedSummary = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(generatedSummary))
+            var generatedDescription = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(generatedDescription))
             {
-                finalDescription = generatedSummary;
-            }
-            else
-            {
-                generatedSummary = null;
+                finalDescription = generatedDescription;
+                descriptionFromGenerator = true;
             }
         }
 
-        if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(generatedSummary))
+        if (_titleGenerationEnabled && !userProvidedTitle && descriptionFromGenerator && !string.IsNullOrWhiteSpace(finalDescription))
         {
-            generatedTitle = await _titles.GenerateTitleAsync(entry, generatedSummary, cancellationToken);
+            generatedTitle = await _titles.GenerateTitleAsync(entry, finalDescription, cancellationToken);
             if (!string.IsNullOrWhiteSpace(generatedTitle))
             {
                 finalTitle = generatedTitle;
@@ -131,19 +128,22 @@ public sealed class EntriesController : ControllerBase
             normalizedDescription ?? string.Empty,
             StringComparison.Ordinal);
 
-        if (transcript is not null || generatedSummary is not null || generatedTitle is not null || descriptionChanged)
+        if (transcript is not null || generatedTitle is not null || descriptionChanged)
         {
             var updated = Normalize(new VideoEntryUpdateRequest(
                 finalTitle,
                 finalDescription,
-                generatedSummary,
+                null,
                 transcript,
                 tags));
             await _store.UpdateAsync(entry.Id, updated, cancellationToken);
             entry = (await _store.GetAsync(entry.Id, cancellationToken))!;
         }
 
-        await _searchIndex.IndexAsync(entry, cancellationToken);
+        var indexEntry = string.IsNullOrWhiteSpace(transcript)
+            ? entry
+            : entry with { Transcript = transcript };
+        await _searchIndex.IndexAsync(indexEntry, cancellationToken);
 
         _logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
         return CreatedAtRoute(GetEntryRouteName, new { id = entry.Id }, entry);
@@ -170,35 +170,25 @@ public sealed class EntriesController : ControllerBase
             return NotFound();
         }
 
-        string? transcript = entry.Transcript;
-        if (_transcriptionEnabled)
+        var transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(transcript))
         {
-            var ensuredTranscript = await _transcripts.GenerateAsync(entry, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(ensuredTranscript))
-            {
-                transcript = ensuredTranscript;
-                if (!string.Equals(entry.Transcript ?? string.Empty, ensuredTranscript, StringComparison.Ordinal))
-                {
-                    var updateRequest = Normalize(new VideoEntryUpdateRequest(
-                        entry.Title,
-                        entry.Description,
-                        entry.Summary,
-                        ensuredTranscript,
-                        entry.Tags));
-
-                    await _store.UpdateAsync(entry.Id, updateRequest, cancellationToken);
-                    var updated = await _store.GetAsync(entry.Id, cancellationToken);
-                    if (updated is not null)
-                    {
-                        entry = updated;
-                        transcript = updated.Transcript;
-                        await _searchIndex.IndexAsync(updated, cancellationToken);
-                    }
-                }
-            }
+            return Ok(transcript);
         }
 
-        return string.IsNullOrWhiteSpace(transcript) ? NotFound() : Ok(transcript);
+        if (!_transcriptionEnabled)
+        {
+            return NotFound();
+        }
+
+        var ensuredTranscript = await _transcripts.GenerateAsync(entry, cancellationToken);
+        if (string.IsNullOrWhiteSpace(ensuredTranscript))
+        {
+            return NotFound();
+        }
+
+        await _searchIndex.IndexAsync(entry with { Transcript = ensuredTranscript }, cancellationToken);
+        return Ok(ensuredTranscript);
     }
 
     [HttpGet("{id:guid}/summary")]
@@ -210,7 +200,7 @@ public sealed class EntriesController : ControllerBase
             return NotFound();
         }
 
-        return string.IsNullOrWhiteSpace(entry.Summary) ? NotFound() : Ok(entry.Summary);
+        return string.IsNullOrWhiteSpace(entry.Description) ? NotFound() : Ok(entry.Description);
     }
 
     [HttpGet("{id:guid}/title")]

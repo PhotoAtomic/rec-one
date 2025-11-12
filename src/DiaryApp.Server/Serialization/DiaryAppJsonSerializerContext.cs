@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,6 +14,8 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(VideoEntryDto[]))]
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntryDto>))]
 [JsonSerializable(typeof(UserEntriesDocument))]
+[JsonSerializable(typeof(StoredUserEntriesDocument))]
+[JsonSerializable(typeof(StoredVideoEntry))]
 [JsonSerializable(typeof(UserMediaPreferences))]
 [JsonSerializable(typeof(VideoEntryUpdateRequest))]
 [JsonSerializable(typeof(SearchQuery))]

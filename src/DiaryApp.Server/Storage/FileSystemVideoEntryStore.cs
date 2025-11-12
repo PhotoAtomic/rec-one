@@ -16,7 +16,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     private const string DefaultUserSegment = "default";
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly Dictionary<string, Dictionary<Guid, VideoEntryDto>> _cacheByUser = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<Guid, StoredVideoEntry>> _cacheByUser = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, UserMediaPreferences> _preferencesByUser = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _initializedUsers = new(StringComparer.OrdinalIgnoreCase);
     private readonly StorageOptions _options;
@@ -52,16 +52,20 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             await videoStream.CopyToAsync(fileStream, cancellationToken);
         }
 
-        var record = new VideoEntryDto(
+        var tags = metadata.Tags?.ToArray() ?? Array.Empty<string>();
+        var record = new StoredVideoEntry(
             id,
             metadata.Title,
             metadata.Description,
-            metadata.Summary,
-            metadata.Transcript,
-            metadata.Tags,
+            tags,
             filePath,
             startedAt,
             DateTimeOffset.UtcNow);
+
+        if (!string.IsNullOrWhiteSpace(metadata.Transcript))
+        {
+            await TranscriptFileStore.WriteTranscriptAsync(filePath, metadata.Transcript, cancellationToken);
+        }
 
         await _gate.WaitAsync(cancellationToken);
         try
@@ -74,7 +78,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         {
             _gate.Release();
         }
-        return record;
+        return ToDto(record);
     }
 
     public async Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken)
@@ -86,7 +90,10 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         try
         {
             var cache = GetOrCreateCache(userSegment);
-            return cache.Values.OrderByDescending(entry => entry.StartedAt).ToArray();
+            return cache.Values
+                .OrderByDescending(entry => entry.StartedAt)
+                .Select(ToDto)
+                .ToArray();
         }
         finally
         {
@@ -103,7 +110,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         try
         {
             var cache = GetOrCreateCache(userSegment);
-            return cache.TryGetValue(id, out var entry) ? entry : null;
+            return cache.TryGetValue(id, out var entry) ? ToDto(entry) : null;
         }
         finally
         {
@@ -126,12 +133,16 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                 {
                     Title = request.Title,
                     Description = request.Description,
-                    Summary = request.Summary,
-                    Transcript = request.Transcript,
-                    Tags = request.Tags,
+                    Tags = request.Tags?.ToArray() ?? Array.Empty<string>(),
                     CompletedAt = DateTimeOffset.UtcNow
                 };
                 cache[id] = updated;
+
+                if (!string.IsNullOrWhiteSpace(request.Transcript))
+                {
+                    await TranscriptFileStore.WriteTranscriptAsync(updated.VideoPath, request.Transcript, cancellationToken);
+                }
+
                 await PersistLockedAsync(userSegment, cancellationToken);
             }
         }
@@ -197,8 +208,9 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             {
                 cache[record.Id] = record;
             }
-            _preferencesByUser[userSegment] = NormalizePreferences(document.Preferences);
+            _preferencesByUser[userSegment] = document.Preferences;
 
+            await PersistLockedAsync(userSegment, cancellationToken);
             _initializedUsers.Add(userSegment);
         }
         finally
@@ -207,36 +219,45 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
     }
 
-    private static async Task<UserEntriesDocument> ReadDocumentAsync(string indexFile, CancellationToken cancellationToken)
+    private async Task<StoredUserEntriesDocument> ReadDocumentAsync(string indexFile, CancellationToken cancellationToken)
     {
         if (!File.Exists(indexFile))
         {
-            return UserEntriesDocument.Empty;
+            return StoredUserEntriesDocument.Empty;
         }
 
         await using var stream = File.Open(indexFile, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (stream.Length == 0)
         {
-            return UserEntriesDocument.Empty;
+            return StoredUserEntriesDocument.Empty;
         }
 
         try
         {
-            var document = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
-            return NormalizeDocument(document);
+            var document = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken);
+            return NormalizeStoredDocument(document);
         }
         catch (JsonException)
         {
             stream.Position = 0;
             try
             {
-                var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken)
-                    ?? Array.Empty<VideoEntryDto>();
-                return new UserEntriesDocument(entries, UserMediaPreferences.Default);
+                var legacyDocument = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
+                return await ConvertLegacyDocumentAsync(legacyDocument, cancellationToken);
             }
             catch (JsonException)
             {
-                return UserEntriesDocument.Empty;
+                stream.Position = 0;
+                try
+                {
+                    var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken)
+                        ?? Array.Empty<VideoEntryDto>();
+                    return await ConvertLegacyEntriesAsync(entries, UserMediaPreferences.Default, cancellationToken);
+                }
+                catch (JsonException)
+                {
+                    return StoredUserEntriesDocument.Empty;
+                }
             }
         }
     }
@@ -245,12 +266,86 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     {
         var cache = GetOrCreateCache(userSegment);
         var preferences = GetOrCreatePreferences(userSegment);
-        var document = new UserEntriesDocument(cache.Values.ToArray(), preferences);
+        var document = new StoredUserEntriesDocument(cache.Values.ToArray(), preferences);
         var indexFile = GetIndexFile(userSegment);
         Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
         await using var stream = File.Create(indexFile);
-        await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken);
     }
+
+    private async Task<StoredUserEntriesDocument> ConvertLegacyDocumentAsync(UserEntriesDocument? document, CancellationToken cancellationToken)
+    {
+        if (document is null)
+        {
+            return StoredUserEntriesDocument.Empty;
+        }
+
+        var preferences = NormalizePreferences(document.Preferences);
+        var entries = document.Entries ?? Array.Empty<VideoEntryDto>();
+        return await ConvertLegacyEntriesAsync(entries, preferences, cancellationToken);
+    }
+
+    private async Task<StoredUserEntriesDocument> ConvertLegacyEntriesAsync(
+        IReadOnlyCollection<VideoEntryDto> entries,
+        UserMediaPreferences preferences,
+        CancellationToken cancellationToken)
+    {
+        if (entries.Count == 0)
+        {
+            return new StoredUserEntriesDocument(Array.Empty<StoredVideoEntry>(), preferences);
+        }
+
+        var converted = new List<StoredVideoEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            await MigrateTranscriptAsync(entry, cancellationToken);
+            converted.Add(ToStored(entry));
+        }
+
+        return new StoredUserEntriesDocument(converted, preferences);
+    }
+
+    private static async Task MigrateTranscriptAsync(VideoEntryDto entry, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Transcript) ||
+            string.IsNullOrWhiteSpace(entry.VideoPath))
+        {
+            return;
+        }
+
+        var transcriptPath = TranscriptFileStore.GetTranscriptPath(entry.VideoPath);
+        if (File.Exists(transcriptPath))
+        {
+            return;
+        }
+
+        await TranscriptFileStore.WriteTranscriptByPathAsync(transcriptPath, entry.Transcript, cancellationToken);
+    }
+
+    private static StoredVideoEntry ToStored(VideoEntryDto entry)
+    {
+        var tags = entry.Tags?.ToArray() ?? Array.Empty<string>();
+        return new StoredVideoEntry(
+            entry.Id,
+            entry.Title,
+            entry.Description,
+            tags,
+            entry.VideoPath,
+            entry.StartedAt,
+            entry.CompletedAt);
+    }
+
+    private static VideoEntryDto ToDto(StoredVideoEntry entry)
+        => new(
+            entry.Id,
+            entry.Title,
+            entry.Description,
+            null,
+            null,
+            entry.Tags,
+            entry.VideoPath,
+            entry.StartedAt,
+            entry.CompletedAt);
 
     private UserMediaPreferences GetOrCreatePreferences(string userSegment)
     {
@@ -276,11 +371,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         return new UserMediaPreferences(camera, microphone, language);
     }
 
-    private static UserEntriesDocument NormalizeDocument(UserEntriesDocument? document)
+    private static StoredUserEntriesDocument NormalizeStoredDocument(StoredUserEntriesDocument? document)
         => document is null
-            ? UserEntriesDocument.Empty
-            : new UserEntriesDocument(
-                document.Entries ?? Array.Empty<VideoEntryDto>(),
+            ? StoredUserEntriesDocument.Empty
+            : new StoredUserEntriesDocument(
+                document.Entries ?? Array.Empty<StoredVideoEntry>(),
                 NormalizePreferences(document.Preferences));
 
     private static string NormalizeLanguage(string? language)
@@ -288,11 +383,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             ? UserMediaPreferences.Default.TranscriptLanguage
             : language.Trim();
 
-    private Dictionary<Guid, VideoEntryDto> GetOrCreateCache(string userSegment)
+    private Dictionary<Guid, StoredVideoEntry> GetOrCreateCache(string userSegment)
     {
         if (!_cacheByUser.TryGetValue(userSegment, out var cache))
         {
-            cache = new Dictionary<Guid, VideoEntryDto>();
+            cache = new Dictionary<Guid, StoredVideoEntry>();
             _cacheByUser[userSegment] = cache;
         }
 
@@ -328,4 +423,20 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var sanitized = string.Join("_", value.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         return string.IsNullOrWhiteSpace(sanitized) ? DefaultUserSegment : sanitized;
     }
+}
+
+internal sealed record StoredVideoEntry(
+    Guid Id,
+    string Title,
+    string? Description,
+    IReadOnlyCollection<string> Tags,
+    string VideoPath,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt);
+
+internal sealed record StoredUserEntriesDocument(
+    IReadOnlyCollection<StoredVideoEntry> Entries,
+    UserMediaPreferences Preferences)
+{
+    public static readonly StoredUserEntriesDocument Empty = new(Array.Empty<StoredVideoEntry>(), UserMediaPreferences.Default);
 }
