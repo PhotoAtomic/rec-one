@@ -7,7 +7,7 @@
 <h1>Entries</h1>
 
 <EditForm Model="this" OnValidSubmit="Search">
-    <input @bind="_keyword" placeholder="Search by keyword" />
+    <input @bind="_keyword" placeholder="Search by keyword or describe a moment" />
     <button type="submit">Search</button>
 </EditForm>
 
@@ -125,13 +125,14 @@ else
 
     private async Task Search()
     {
-        if (string.IsNullOrWhiteSpace(_keyword))
+        var criteria = string.IsNullOrWhiteSpace(_keyword) ? string.Empty : _keyword.Trim();
+        if (string.IsNullOrWhiteSpace(criteria))
         {
             _results = await EntryClient.ListAsync();
         }
         else
         {
-            var searchResults = await SearchClient.SearchAsync(new SearchQuery(_keyword, null));
+            var searchResults = await SearchClient.SearchAsync(new SearchQuery(criteria, criteria));
             var entries = new List<VideoEntryDto>();
             foreach (var match in searchResults)
             {

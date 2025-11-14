@@ -34,3 +34,8 @@ public interface ISearchIndex
     Task<IReadOnlyCollection<VideoEntrySearchResult>> SearchAsync(SearchQuery query, CancellationToken cancellationToken);
     Task RemoveAsync(Guid id, CancellationToken cancellationToken);
 }
+
+public interface IDescriptionEmbeddingGenerator
+{
+    Task<float[]?> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken);
+}

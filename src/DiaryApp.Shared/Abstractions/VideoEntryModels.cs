@@ -68,6 +68,14 @@ public record TagSuggestionOptions
     public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
 }
 
+public record SemanticSearchOptions
+{
+    public const string SectionName = "SemanticSearch";
+    public bool Enabled { get; set; }
+    public string? Provider { get; set; }
+    public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
+}
+
 public record UserMediaPreferences(
     string? CameraDeviceId,
     string? MicrophoneDeviceId,

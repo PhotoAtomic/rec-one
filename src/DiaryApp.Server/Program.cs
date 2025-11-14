@@ -21,6 +21,7 @@ builder.Services.AddOptions<TranscriptOptions>().BindConfiguration(TranscriptOpt
 builder.Services.AddOptions<SummaryOptions>().BindConfiguration(SummaryOptions.SectionName);
 builder.Services.AddOptions<TitleGenerationOptions>().BindConfiguration(TitleGenerationOptions.SectionName);
 builder.Services.AddOptions<TagSuggestionOptions>().BindConfiguration(TagSuggestionOptions.SectionName);
+builder.Services.AddOptions<SemanticSearchOptions>().BindConfiguration(SemanticSearchOptions.SectionName);
 
 var keysDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DiaryApp", "keys");
 Directory.CreateDirectory(keysDirectory);
@@ -33,6 +34,7 @@ builder.Services.AddSingleton<ITranscriptGenerator, TranscriptGenerator>();
 builder.Services.AddSingleton<ISummaryGenerator, SummaryGenerator>();
 builder.Services.AddSingleton<ITitleGenerator, TitleGenerator>();
 builder.Services.AddSingleton<ITagSuggestionGenerator, TagSuggestionGenerator>();
+builder.Services.AddSingleton<IDescriptionEmbeddingGenerator, DescriptionEmbeddingGenerator>();
 builder.Services.AddSingleton<ISearchIndex, InMemorySearchIndex>();
 builder.Services.AddHttpContextAccessor();
 

@@ -26,8 +26,8 @@ rec-one/
 ### Server highlights
 - RESTful endpoints for creating, updating and retrieving diary entries and derived assets
 - File-system backed storage with configurable root directory and naming convention
-- Pluggable processing services to integrate transcription, summarization, auto-title, and tag-suggestion providers (remote API or sidecar containers)
-- In-memory search index placeholder with keyword support and extension point for vector search implementations
+- Pluggable processing services to integrate transcription, summarization, auto-title, tag-suggestion providers, and now semantic search embeddings (via Azure OpenAI)
+- In-memory search index with keyword search plus optional Azure OpenAI embedding powered semantic search over descriptions
 - Optional OpenID Connect authentication wiring via `Authentication:OIDC` settings
 
 ## Getting started
@@ -68,6 +68,7 @@ Key settings live in `DiaryApp.Server/appsettings.json` (or any other ASP.NET Co
 | `Authentication:OIDC` | `Authority`, `ClientId`, `ClientSecret`, `ResponseType` | Enables OpenID Connect login when provided. Leave the entire section commented/empty to run anonymously. Every setting can also be supplied through env vars (`Authentication__OIDC__Authority`, etc.). |
 | `Transcription`, `Summaries`, `Titles`, `TagSuggestions` | `Enabled`, `Provider`, `Settings` | Toggle the automatic pipelines. When `Enabled` is `true` and the user leaves the field blank, the configured provider is invoked. Use `Settings` to inject provider-specific options (API keys, model names, endpoints). `TagSuggestions` looks at the user's favorite tag list (managed under **Settings**) and appends AI-selected tags when entries are saved or transcripts are requested. |
 | `Logging` | `LogLevel` | Standard ASP.NET Core logging knobs. |
+| `SemanticSearch` | `Enabled`, `Provider`, `Settings` | Optional Azure OpenAI embedding support for description-based semantic search. When enabled, the server stores vectors in-memory and falls back to keyword search when embeddings cannot be generated. |
 
 > **Cookie persistence:** the server stores its data-protection keys under `%LOCALAPPDATA%/DiaryApp/keys` (Linux: `/root/.local/share/DiaryApp/keys`). Mount that path when containerizing so auth cookies survive restarts.
 
@@ -158,6 +159,24 @@ When `TagSuggestions.Enabled` is `true`, the backend will ask Azure OpenAI to se
 ```
 
 Tags suggested by the model are merged with whatever the author typed and deduplicated so no entry ends up with repeated labels.
+
+#### Azure OpenAI semantic search
+
+Semantic search piggybacks on the same Azure OpenAI resource you already use for titles and summaries. Provision an embeddings deployment (for example `text-embedding-3-small`) and supply its endpoint + key under `SemanticSearch`:
+
+```json
+"SemanticSearch": {
+  "Enabled": true,
+  "Provider": "AzureOpenAI",
+  "Settings": {
+    "Endpoint": "https://<resource>.cognitiveservices.azure.com/openai/v1/",
+    "DeploymentName": "text-embedding-3-small",
+    "ApiKey": "<store-in-user-secrets>"
+  }
+}
+```
+
+When enabled, every entry description is embedded during indexing and cached in-memory alongside keyword metadata. The `/api/search` endpoint now prefers semantic matches (cosine similarity) and automatically falls back to the traditional keyword flow when embeddings are unavailable or the provider is disabled.
 
 ### Container deployment
 
