@@ -27,4 +27,10 @@ public class VideoEntryClient(HttpClient httpClient) : IVideoEntryClient
         var response = await httpClient.PutAsJsonAsync($"api/entries/{id}", request, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.DeleteAsync($"api/entries/{id}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
 }

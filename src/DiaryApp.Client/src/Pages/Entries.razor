@@ -31,15 +31,34 @@ else
                         <p class="entry-card__timestamp">@entry.StartedAt.ToLocalTime().ToString("f")</p>
                     </div>
                     <div class="entry-card__header-actions">
-                        <button type="button"
-                                class="icon-button"
-                                title="Edit entry"
-                                aria-label="Edit entry"
-                                @onclick="() => OpenEditor(entry.Id)">
-                            <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                            </svg>
-                        </button>
+                        <div class="entry-card__header-buttons">
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Edit entry"
+                                    aria-label="Edit entry"
+                                    @onclick="() => OpenEditor(entry.Id)">
+                                <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                                </svg>
+                            </button>
+                            <button type="button"
+                                    class="icon-button danger"
+                                    title="Delete entry"
+                                    aria-label="Delete entry"
+                                    disabled="@IsDeleting(entry.Id)"
+                                    @onclick="() => DeleteEntry(entry.Id)">
+                                @if (IsDeleting(entry.Id))
+                                {
+                                    <span class="button-spinner" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1z" />
+                                    </svg>
+                                }
+                            </button>
+                        </div>
                         <VideoPreview Entry="entry" PreviewSecond="5" />
                     </div>
                 </div>
@@ -97,6 +116,7 @@ else
     private IReadOnlyCollection<VideoEntryDto>? _results;
     private readonly Dictionary<Guid, string> _transcripts = new();
     private readonly HashSet<Guid> _loadingTranscripts = new();
+    private readonly HashSet<Guid> _deletingEntries = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -148,9 +168,36 @@ else
     }
 
     private bool IsTranscriptLoading(Guid id) => _loadingTranscripts.Contains(id);
+    private bool IsDeleting(Guid id) => _deletingEntries.Contains(id);
 
     private void OpenEditor(Guid id)
     {
         NavigationManager.NavigateTo($"/entries/{id}/edit");
+    }
+
+    private async Task DeleteEntry(Guid id)
+    {
+        if (!_deletingEntries.Add(id))
+        {
+            return;
+        }
+
+        try
+        {
+            await EntryClient.DeleteAsync(id);
+            if (_results is not null)
+            {
+                _results = _results
+                    .Where(entry => entry.Id != id)
+                    .ToArray();
+            }
+
+            _transcripts.Remove(id);
+            _loadingTranscripts.Remove(id);
+        }
+        finally
+        {
+            _deletingEntries.Remove(id);
+        }
     }
 }

@@ -32,4 +32,5 @@ public interface ISearchIndex
 {
     Task IndexAsync(VideoEntryDto entry, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<VideoEntrySearchResult>> SearchAsync(SearchQuery query, CancellationToken cancellationToken);
+    Task RemoveAsync(Guid id, CancellationToken cancellationToken);
 }

@@ -179,6 +179,19 @@ public sealed class EntriesController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await _store.DeleteAsync(id, cancellationToken);
+        if (!deleted)
+        {
+            return NotFound();
+        }
+
+        await _searchIndex.RemoveAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpGet("{id:guid}/transcript")]
     public async Task<ActionResult<string>> GetTranscriptAsync(Guid id, CancellationToken cancellationToken)
     {

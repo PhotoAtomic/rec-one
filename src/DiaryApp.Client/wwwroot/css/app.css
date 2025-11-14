@@ -215,6 +215,11 @@ video {
     gap: 0.75rem;
 }
 
+.entry-card__header-buttons {
+    display: flex;
+    gap: 0.4rem;
+}
+
 .entry-card__timestamp {
     margin: 0.25rem 0 0;
     color: #8ab4ff;
@@ -354,6 +359,16 @@ button.icon-button {
 button.icon-button:hover {
     color: #ffffff;
     border-color: rgba(255, 255, 255, 0.4);
+}
+
+button.icon-button.danger {
+    color: #ff8a80;
+    border-color: rgba(255, 138, 128, 0.5);
+}
+
+button.icon-button.danger:hover {
+    color: #ff1744;
+    border-color: rgba(255, 23, 68, 0.6);
 }
 
 .icon-button svg {

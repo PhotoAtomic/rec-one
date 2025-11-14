@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -150,6 +151,39 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         {
             _gate.Release();
         }
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var userSegment = GetCurrentUserSegment();
+        await EnsureInitializedAsync(userSegment, cancellationToken);
+
+        StoredVideoEntry? removed = null;
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var cache = GetOrCreateCache(userSegment);
+            if (!cache.TryGetValue(id, out removed))
+            {
+                return false;
+            }
+
+            cache.Remove(id);
+            await PersistLockedAsync(userSegment, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (!string.IsNullOrWhiteSpace(removed?.VideoPath))
+        {
+            TryDeleteFile(removed.VideoPath);
+            TryDeleteFile(TranscriptFileStore.GetTranscriptPath(removed.VideoPath));
+        }
+
+        return true;
     }
 
     public async Task<UserMediaPreferences> GetPreferencesAsync(CancellationToken cancellationToken)
@@ -428,6 +462,28 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = string.Join("_", value.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         return string.IsNullOrWhiteSpace(sanitized) ? DefaultUserSegment : sanitized;
+    }
+
+    private static void TryDeleteFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }
 

@@ -11,6 +11,7 @@ public interface IVideoEntryClient
     Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken = default);
     Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 public interface ITranscriptionClient

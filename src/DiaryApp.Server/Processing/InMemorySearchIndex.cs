@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 
@@ -91,5 +92,11 @@ public sealed class InMemorySearchIndex : ISearchIndex
         {
             _initializationGate.Release();
         }
+    }
+
+    public Task RemoveAsync(Guid id, CancellationToken cancellationToken)
+    {
+        _entries.TryRemove(id, out _);
+        return Task.CompletedTask;
     }
 }
