@@ -25,7 +25,7 @@
             <div class="nav-greeting">Hi, @(_status.Name ?? "there")</div>
             <a href="/logout" class="nav-link">Logout</a>
         }
-        else if (_statusLoaded)
+        else if (_statusLoaded && _status.AuthenticationEnabled)
         {
             <a href="/login" class="nav-link">Login</a>
         }

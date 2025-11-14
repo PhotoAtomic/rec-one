@@ -8,6 +8,7 @@ using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Authorization;
@@ -42,34 +43,46 @@ var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
 var authenticationConfigured = oidcSection.Exists() && !string.IsNullOrWhiteSpace(oidcSection["Authority"]);
 if (authenticationConfigured)
 {
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
-})
-    .AddCookie(options =>
+    builder.Services.AddAuthentication(options =>
     {
-        options.Cookie.Name = "DiaryApp.Auth";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
-            ? CookieSecurePolicy.SameAsRequest
-            : CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.IsEssential = true;
-        options.ExpireTimeSpan = TimeSpan.FromDays(30);
-        options.SlidingExpiration = true;
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
     })
-    .AddOpenIdConnect(options =>
-    {
-        options.Authority = oidcSection["Authority"];
-        options.ClientId = oidcSection["ClientId"] ?? "diary-app";
-        options.ClientSecret = oidcSection["ClientSecret"];
-        options.ResponseType = oidcSection["ResponseType"] ?? "code";
-        options.SaveTokens = true;
-        options.Scope.Add("profile");
-        options.TokenValidationParameters.NameClaimType = "preferred_username";
-    });
+        .AddCookie(options =>
+        {
+            options.Cookie.Name = "DiaryApp.Auth";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+                ? CookieSecurePolicy.SameAsRequest
+                : CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.IsEssential = true;
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
+            options.SlidingExpiration = true;
+        })
+        .AddOpenIdConnect(options =>
+        {
+            options.Authority = oidcSection["Authority"];
+            options.ClientId = oidcSection["ClientId"] ?? "diary-app";
+            options.ClientSecret = oidcSection["ClientSecret"];
+            options.ResponseType = oidcSection["ResponseType"] ?? "code";
+            options.SaveTokens = true;
+            options.Scope.Add("profile");
+            options.TokenValidationParameters.NameClaimType = "preferred_username";
+        });
     builder.Services.AddAuthorization();
+}
+else
+{
+    builder.Services.AddAuthorization(options =>
+    {
+        var allowAnonymousPolicy = new AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true)
+            .Build();
+
+        options.DefaultPolicy = allowAnonymousPolicy;
+        options.FallbackPolicy = allowAnonymousPolicy;
+    });
 }
 
 builder.Services.AddControllersWithViews(options =>
@@ -115,8 +128,9 @@ app.UseRouting();
 if (authenticationConfigured)
 {
     app.UseAuthentication();
-    app.UseAuthorization();
 }
+
+app.UseAuthorization();
 
 var controllers = app.MapControllers();
 app.MapFallbackToFile("index.html");

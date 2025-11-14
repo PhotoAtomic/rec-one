@@ -216,8 +216,4 @@ To override configuration inside the container, either mount a custom `appsettin
 
 ## Next steps
 
-- Replace placeholder transcription/summarization/title services with real integrations (REST, gRPC, or local inference containers)
-- Swap the in-memory search index for a persistent store with vector search capabilities (e.g., Qdrant, Pinecone, Azure AI Search)
-- Harden OpenID Connect flows with scopes, claims mapping, and role-based authorization
-- Add UI for editing entries and managing tags beyond the initial creation flow
-- Expand PWA offline support by enriching the service worker asset manifest
+Upgrade to .NET 10
