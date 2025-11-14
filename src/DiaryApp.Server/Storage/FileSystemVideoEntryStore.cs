@@ -368,7 +368,13 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var camera = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId.Trim();
         var microphone = string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId) ? null : preferences.MicrophoneDeviceId.Trim();
         var language = NormalizeLanguage(preferences.TranscriptLanguage);
-        return new UserMediaPreferences(camera, microphone, language);
+        var favoriteTags = preferences.FavoriteTags?
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? Array.Empty<string>();
+
+        return new UserMediaPreferences(camera, microphone, language, favoriteTags);
     }
 
     private static StoredUserEntriesDocument NormalizeStoredDocument(StoredUserEntriesDocument? document)

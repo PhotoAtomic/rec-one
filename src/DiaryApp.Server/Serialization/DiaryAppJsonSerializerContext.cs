@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using DiaryApp.Server.Processing;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,7 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(VideoEntrySearchResult[]))]
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntrySearchResult>))]
 [JsonSerializable(typeof(UserStatusDto))]
+[JsonSerializable(typeof(TagSuggestionRequest))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 internal partial class DiaryAppJsonSerializerContext : JsonSerializerContext;

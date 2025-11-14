@@ -38,6 +38,16 @@ services:
       Titles__Settings__SystemPrompt: >-
         You are a helpful assistant that writes concise, catchy titles (max 8 words)
         based on diary entry summaries. Respond with title text only.
+      TagSuggestions__Enabled: "true"
+      TagSuggestions__Provider: AzureOpenAI
+      TagSuggestions__Settings__Endpoint: https://<azure-openai-endpoint>.cognitiveservices.azure.com/openai/v1/
+      TagSuggestions__Settings__DeploymentName: <tag-deployment-name>
+      TagSuggestions__Settings__ApiKey: <tag-api-key>
+      TagSuggestions__Settings__SystemPrompt: >-
+        You are an AI assistant that analyzes a diary video description and selects
+        relevant tags from a provided list. Respond ONLY with JSON shaped as
+        {"selectedTags":["tag-a","tag-b"]}. Never invent new tags and return an
+        empty array when nothing matches.
     volumes:
       - ./data:/data/entries
       - ./keys:/root/.local/share/DiaryApp/keys

@@ -60,9 +60,21 @@ public record TitleGenerationOptions
     public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
 }
 
-public record UserMediaPreferences(string? CameraDeviceId, string? MicrophoneDeviceId, string TranscriptLanguage = "en-US")
+public record TagSuggestionOptions
 {
-    public static readonly UserMediaPreferences Default = new(null, null, "en-US");
+    public const string SectionName = "TagSuggestions";
+    public bool Enabled { get; set; }
+    public string? Provider { get; set; }
+    public IDictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
+}
+
+public record UserMediaPreferences(
+    string? CameraDeviceId,
+    string? MicrophoneDeviceId,
+    string TranscriptLanguage = "en-US",
+    IReadOnlyCollection<string>? FavoriteTags = null)
+{
+    public static readonly UserMediaPreferences Default = new(null, null, "en-US", Array.Empty<string>());
 }
 
 public record UserEntriesDocument(

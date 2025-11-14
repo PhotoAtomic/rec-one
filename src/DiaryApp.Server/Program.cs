@@ -20,6 +20,7 @@ builder.Services.AddOptions<StorageOptions>().BindConfiguration(StorageOptions.S
 builder.Services.AddOptions<TranscriptOptions>().BindConfiguration(TranscriptOptions.SectionName);
 builder.Services.AddOptions<SummaryOptions>().BindConfiguration(SummaryOptions.SectionName);
 builder.Services.AddOptions<TitleGenerationOptions>().BindConfiguration(TitleGenerationOptions.SectionName);
+builder.Services.AddOptions<TagSuggestionOptions>().BindConfiguration(TagSuggestionOptions.SectionName);
 
 var keysDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DiaryApp", "keys");
 Directory.CreateDirectory(keysDirectory);
@@ -31,6 +32,7 @@ builder.Services.AddSingleton<IVideoEntryStore, FileSystemVideoEntryStore>();
 builder.Services.AddSingleton<ITranscriptGenerator, TranscriptGenerator>();
 builder.Services.AddSingleton<ISummaryGenerator, SummaryGenerator>();
 builder.Services.AddSingleton<ITitleGenerator, TitleGenerator>();
+builder.Services.AddSingleton<ITagSuggestionGenerator, TagSuggestionGenerator>();
 builder.Services.AddSingleton<ISearchIndex, InMemorySearchIndex>();
 builder.Services.AddHttpContextAccessor();
 

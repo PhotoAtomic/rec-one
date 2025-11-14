@@ -216,8 +216,30 @@ video {
 }
 
 .entry-card__tags {
-    color: #cfd8dc;
-    font-size: 0.95rem;
+    margin: 0.75rem 0;
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.tag-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.8rem;
+    border-radius: 999px;
+    background-color: rgba(207, 226, 255, 0.35);
+    border: 1px solid rgba(100, 181, 246, 0.9);
+    font-size: 0.85rem;
+    color: #e3f2fd;
+    letter-spacing: 0.02em;
+}
+
+.tag-placeholder {
+    font-size: 0.85rem;
+    color: #90a4ae;
 }
 
 .entry-preview {

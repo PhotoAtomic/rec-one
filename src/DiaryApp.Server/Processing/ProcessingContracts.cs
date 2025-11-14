@@ -19,6 +19,15 @@ public interface ITitleGenerator
     Task<string?> GenerateTitleAsync(VideoEntryDto entry, string? summary, CancellationToken cancellationToken);
 }
 
+public interface ITagSuggestionGenerator
+{
+    Task<IReadOnlyCollection<string>> GenerateTagsAsync(
+        string description,
+        IReadOnlyCollection<string> favoriteTags,
+        IReadOnlyCollection<string> existingTags,
+        CancellationToken cancellationToken);
+}
+
 public interface ISearchIndex
 {
     Task IndexAsync(VideoEntryDto entry, CancellationToken cancellationToken);

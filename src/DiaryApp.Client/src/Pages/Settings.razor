@@ -49,6 +49,14 @@ else
             <small>This language is sent to Azure Speech so transcripts match your preferred locale.</small>
         </div>
 
+        <div class="settings-section">
+            <label for="favoriteTagsInput">Favorite tags</label>
+            <InputText id="favoriteTagsInput"
+                       @bind-Value="_formModel.FavoriteTags"
+                       placeholder="Comma separated tags (e.g. meetings, demos, bugs)" />
+            <small>We'll reuse these tags when suggesting AI labels.</small>
+        </div>
+
         <div class="settings-actions">
             <button type="submit" disabled="@_isSaving">Save preferences</button>
             <button type="button"
@@ -81,6 +89,7 @@ else
         public string? CameraDeviceId { get; set; }
         public string? MicrophoneDeviceId { get; set; }
         public string TranscriptLanguage { get; set; } = UserMediaPreferences.Default.TranscriptLanguage;
+        public string FavoriteTags { get; set; } = string.Empty;
     }
 
     private static readonly LanguageOption[] LanguageOptions =
@@ -254,6 +263,7 @@ else
         _formModel.CameraDeviceId = NormalizeForInput(preferences.CameraDeviceId);
         _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
         _formModel.TranscriptLanguage = NormalizeLanguageForInput(preferences.TranscriptLanguage);
+        _formModel.FavoriteTags = string.Join(", ", preferences.FavoriteTags ?? Array.Empty<string>());
         _isLoading = false;
     }
 
@@ -290,7 +300,8 @@ else
             var preferences = new UserMediaPreferences(
                 NormalizeSelection(_formModel.CameraDeviceId),
                 NormalizeSelection(_formModel.MicrophoneDeviceId),
-                NormalizeLanguageSelection(_formModel.TranscriptLanguage));
+                NormalizeLanguageSelection(_formModel.TranscriptLanguage),
+                ParseFavoriteTags(_formModel.FavoriteTags));
 
             await MediaSettingsClient.SaveMediaPreferencesAsync(preferences);
             _statusMessage = "Preferences saved. Future recordings will use the selected devices.";
@@ -334,4 +345,11 @@ else
             ? normalized
             : UserMediaPreferences.Default.TranscriptLanguage;
     }
+
+    private static IReadOnlyCollection<string> ParseFavoriteTags(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 }

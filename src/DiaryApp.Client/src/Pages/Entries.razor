@@ -40,10 +40,21 @@ else
                 {
                     <p><em>@entry.Summary</em></p>
                 }
-                @if (entry.Tags.Any())
-                {
-                    <p class="entry-card__tags">Tags: @string.Join(", ", entry.Tags)</p>
-                }
+                <div class="entry-card__tags">
+                    @if (entry.Tags.Any())
+                    {
+                        <div class="tag-list">
+                            @foreach (var tag in entry.Tags.OrderBy(t => t, System.StringComparer.OrdinalIgnoreCase))
+                            {
+                                <span class="tag-pill">@tag</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="tag-placeholder">No tags yet</span>
+                    }
+                </div>
                 <button class="with-spinner"
                         @onclick="() => LoadTranscript(entry.Id)"
                         disabled="@IsTranscriptLoading(entry.Id)">
