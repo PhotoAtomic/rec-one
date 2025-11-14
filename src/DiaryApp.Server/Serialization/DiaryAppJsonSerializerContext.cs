@@ -13,6 +13,7 @@ namespace DiaryApp.Server.Serialization;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(VideoEntryDto))]
 [JsonSerializable(typeof(VideoEntryDto[]))]
+[JsonSerializable(typeof(List<VideoEntryDto>))]
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntryDto>))]
 [JsonSerializable(typeof(UserEntriesDocument))]
 [JsonSerializable(typeof(StoredUserEntriesDocument))]

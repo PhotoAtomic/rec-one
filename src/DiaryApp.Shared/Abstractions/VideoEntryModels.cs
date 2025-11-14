@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace DiaryApp.Shared.Abstractions;
 
@@ -12,7 +13,8 @@ public record VideoEntryDto(
     IReadOnlyCollection<string> Tags,
     string VideoPath,
     DateTimeOffset StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    [property: JsonIgnore] float[]? DescriptionEmbedding = null);
 
 public record VideoEntryUpdateRequest(
     string Title,

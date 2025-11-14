@@ -36,9 +36,10 @@ public sealed class InMemorySearchIndex : ISearchIndex
     public async Task IndexAsync(VideoEntryDto entry, CancellationToken cancellationToken)
     {
         var hydrated = await HydrateTranscriptAsync(entry, cancellationToken).ConfigureAwait(false);
-        var embedding = await TryGenerateEmbeddingAsync(hydrated.Description, cancellationToken).ConfigureAwait(false);
+        var enriched = await EnsureEmbeddingAsync(hydrated, cancellationToken).ConfigureAwait(false);
+        var embedding = enriched.DescriptionEmbedding;
 
-        _entries[hydrated.Id] = new IndexedEntry(hydrated, embedding);
+        _entries[enriched.Id] = new IndexedEntry(enriched, embedding);
     }
 
     public async Task<IReadOnlyCollection<VideoEntrySearchResult>> SearchAsync(SearchQuery query, CancellationToken cancellationToken)
@@ -95,12 +96,13 @@ public sealed class InMemorySearchIndex : ISearchIndex
         var scored = new List<(VideoEntryDto Entry, double Score)>(_entries.Count);
         foreach (var indexed in _entries.Values)
         {
-            if (indexed.Embedding is null)
+            var embedding = indexed.Embedding ?? indexed.Entry.DescriptionEmbedding;
+            if (embedding is null)
             {
                 continue;
             }
 
-            var score = CosineSimilarity(queryVector, indexed.Embedding);
+            var score = CosineSimilarity(queryVector, embedding);
             if (score <= 0)
             {
                 continue;
@@ -128,6 +130,25 @@ public sealed class InMemorySearchIndex : ISearchIndex
         return string.IsNullOrWhiteSpace(transcript)
             ? entry
             : entry with { Transcript = transcript };
+    }
+
+    private async Task<VideoEntryDto> EnsureEmbeddingAsync(VideoEntryDto entry, CancellationToken cancellationToken)
+    {
+        if (!_semanticSearchEnabled ||
+            string.IsNullOrWhiteSpace(entry.Description) ||
+            (entry.DescriptionEmbedding is { Length: > 0 }))
+        {
+            return entry;
+        }
+
+        var embedding = await TryGenerateEmbeddingAsync(entry.Description, cancellationToken).ConfigureAwait(false);
+        if (embedding is null)
+        {
+            return entry;
+        }
+
+        await _store.UpdateDescriptionEmbeddingAsync(entry.Id, embedding, cancellationToken).ConfigureAwait(false);
+        return entry with { DescriptionEmbedding = embedding };
     }
 
     private async Task<float[]?> TryGenerateEmbeddingAsync(string? description, CancellationToken cancellationToken)
@@ -159,9 +180,9 @@ public sealed class InMemorySearchIndex : ISearchIndex
             foreach (var entry in existingEntries)
             {
                 var hydrated = await HydrateTranscriptAsync(entry, cancellationToken).ConfigureAwait(false);
-                var embedding = await TryGenerateEmbeddingAsync(hydrated.Description, cancellationToken).ConfigureAwait(false);
+                var enriched = await EnsureEmbeddingAsync(hydrated, cancellationToken).ConfigureAwait(false);
 
-                _entries[hydrated.Id] = new IndexedEntry(hydrated, embedding);
+                _entries[enriched.Id] = new IndexedEntry(enriched, enriched.DescriptionEmbedding);
             }
 
             _initialized = true;
