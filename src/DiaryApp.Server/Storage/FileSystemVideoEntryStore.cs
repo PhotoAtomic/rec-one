@@ -47,9 +47,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         var id = Guid.NewGuid();
         var startedAt = DateTimeOffset.UtcNow;
-        var sanitizedTitle = SanitizeSegment(string.IsNullOrWhiteSpace(metadata.Title) ? "untitled" : metadata.Title);
-        var timestamp = DateTimeOffset.UtcNow.ToString(_options.FileNameFormat, CultureInfo.InvariantCulture);
-        var fileName = $"{timestamp} - {sanitizedTitle}".Replace('"', '_');
+        var fileName = id.ToString("D");
         var extension = Path.GetExtension(originalFileName);
         if (string.IsNullOrWhiteSpace(extension))
         {
@@ -161,12 +159,15 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     ? await GenerateEmbeddingAsync(request.Description, cancellationToken)
                     : null;
 
+                var videoPath = EnsureFinalVideoPath(existing, request.Title);
+
                 var updated = existing with
                 {
                     Title = request.Title,
                     Description = request.Description,
                     Tags = request.Tags?.ToArray() ?? Array.Empty<string>(),
                     CompletedAt = DateTimeOffset.UtcNow,
+                    VideoPath = videoPath,
                     DescriptionEmbedding = null
                 };
                 cache[id] = updated;
@@ -599,6 +600,100 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
 
         return DefaultUserSegment;
+    }
+
+    private string EnsureFinalVideoPath(StoredVideoEntry entry, string title)
+    {
+        var currentVideoPath = entry.VideoPath;
+        if (string.IsNullOrWhiteSpace(currentVideoPath))
+        {
+            return currentVideoPath;
+        }
+
+        var directory = Path.GetDirectoryName(currentVideoPath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return currentVideoPath;
+        }
+
+        var extension = Path.GetExtension(currentVideoPath);
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".webm";
+        }
+
+        var sanitizedTitle = SanitizeSegment(string.IsNullOrWhiteSpace(title) ? "untitled" : title);
+        var timestamp = entry.StartedAt.ToString(_options.FileNameFormat, CultureInfo.InvariantCulture);
+        var desiredName = $"{timestamp} - {sanitizedTitle}".Replace('"', '_');
+        var desiredVideoPath = Path.Combine(directory, desiredName + extension);
+
+        if (string.Equals(currentVideoPath, desiredVideoPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return currentVideoPath;
+        }
+
+        if (!TryMoveFile(currentVideoPath, desiredVideoPath, allowMissingSource: false))
+        {
+            return currentVideoPath;
+        }
+
+        TryMoveFile(
+            TranscriptFileStore.GetTranscriptPath(currentVideoPath),
+            TranscriptFileStore.GetTranscriptPath(desiredVideoPath),
+            allowMissingSource: true);
+
+        TryMoveFile(
+            EmbeddingFileStore.GetEmbeddingPath(currentVideoPath),
+            EmbeddingFileStore.GetEmbeddingPath(desiredVideoPath),
+            allowMissingSource: true);
+
+        return desiredVideoPath;
+    }
+
+    private bool TryMoveFile(string? sourcePath, string? destinationPath, bool allowMissingSource)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinationPath))
+        {
+            return allowMissingSource;
+        }
+
+        if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!File.Exists(sourcePath))
+        {
+            return allowMissingSource;
+        }
+
+        try
+        {
+            var destinationDirectory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrWhiteSpace(destinationDirectory))
+            {
+                Directory.CreateDirectory(destinationDirectory);
+            }
+
+            if (File.Exists(destinationPath))
+            {
+                _logger.LogWarning("Destination file {Destination} already exists. Skipping move from {Source}.", destinationPath, sourcePath);
+                return false;
+            }
+
+            File.Move(sourcePath, destinationPath);
+            return true;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Failed to move file from {Source} to {Destination}", sourcePath, destinationPath);
+            return false;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Failed to move file from {Source} to {Destination}", sourcePath, destinationPath);
+            return false;
+        }
     }
 
     private static string SanitizeSegment(string value)
