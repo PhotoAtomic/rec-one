@@ -209,6 +209,12 @@ video {
     flex-wrap: wrap;
 }
 
+.entry-card__header-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
 .entry-card__timestamp {
     margin: 0.25rem 0 0;
     color: #8ab4ff;
@@ -329,6 +335,45 @@ button.with-spinner {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+button.icon-button {
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.4rem;
+    border-radius: 999px;
+    color: #8ab4ff;
+    line-height: 0;
+    min-width: auto;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button.icon-button:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.icon-button svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+    display: block;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.form-error {
+    color: #ff8a80;
+    margin: 0.5rem 0;
 }
 
 .button-spinner {

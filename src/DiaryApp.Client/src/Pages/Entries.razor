@@ -2,6 +2,7 @@
 @inject IVideoEntryClient EntryClient
 @inject ISearchClient SearchClient
 @inject ITranscriptionClient TranscriptionClient
+@inject NavigationManager NavigationManager
 
 <h1>Entries</h1>
 
@@ -29,7 +30,18 @@ else
                         <h3>@entry.Title</h3>
                         <p class="entry-card__timestamp">@entry.StartedAt.ToLocalTime().ToString("f")</p>
                     </div>
-                    <VideoPreview Entry="entry" PreviewSecond="5" />
+                    <div class="entry-card__header-actions">
+                        <button type="button"
+                                class="icon-button"
+                                title="Edit entry"
+                                aria-label="Edit entry"
+                                @onclick="() => OpenEditor(entry.Id)">
+                            <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                            </svg>
+                        </button>
+                        <VideoPreview Entry="entry" PreviewSecond="5" />
+                    </div>
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(entry.Description))
@@ -136,4 +148,9 @@ else
     }
 
     private bool IsTranscriptLoading(Guid id) => _loadingTranscripts.Contains(id);
+
+    private void OpenEditor(Guid id)
+    {
+        NavigationManager.NavigateTo($"/entries/{id}/edit");
+    }
 }

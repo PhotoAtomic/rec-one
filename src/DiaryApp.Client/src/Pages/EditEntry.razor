@@ -1,0 +1,162 @@
+@page "/entries/{EntryId:guid}/edit"
+@using System.ComponentModel.DataAnnotations
+@using System.Linq
+@inject IVideoEntryClient EntryClient
+@inject NavigationManager NavigationManager
+
+<h1>Edit entry</h1>
+
+@if (_isLoading)
+{
+    <p>Loading entry...</p>
+}
+else if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <p class="form-error">@_loadError</p>
+    <button type="button" class="secondary" @onclick="NavigateBack">Back to entries</button>
+}
+else if (_entry is not null)
+{
+    <EditForm Model="_form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <label for="entry-title">Title</label>
+        <InputText id="entry-title" @bind-Value="_form.Title" />
+
+        <label for="entry-description">Description</label>
+        <InputTextArea id="entry-description" @bind-Value="_form.Description" rows="6" />
+
+        <label for="entry-tags">Tags (comma separated)</label>
+        <InputText id="entry-tags" @bind-Value="_form.Tags" />
+
+        @if (!string.IsNullOrWhiteSpace(_saveError))
+        {
+            <p class="form-error">@_saveError</p>
+        }
+
+        <div class="form-actions">
+            <button type="submit" disabled="@_isSaving">
+                @(_isSaving ? "Saving..." : "Save changes")
+            </button>
+            <button type="button" class="secondary" @onclick="NavigateBack" disabled="@_isSaving">Cancel</button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid EntryId { get; set; }
+
+    private EditEntryModel _form = new();
+    private VideoEntryDto? _entry;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _loadError;
+    private string? _saveError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_entry?.Id != EntryId)
+        {
+            await LoadEntryAsync();
+        }
+    }
+
+    private async Task LoadEntryAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _saveError = null;
+        try
+        {
+            _entry = await EntryClient.GetAsync(EntryId);
+            if (_entry is null)
+            {
+                _loadError = "Entry not found.";
+                return;
+            }
+
+            _form = new EditEntryModel
+            {
+                Title = _entry.Title,
+                Description = _entry.Description ?? string.Empty,
+                Tags = SerializeTags(_entry.Tags)
+            };
+        }
+        catch
+        {
+            _loadError = "Unable to load the entry right now.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_entry is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _saveError = null;
+
+        try
+        {
+            var tags = ParseTags(_form.Tags);
+            var request = new VideoEntryUpdateRequest(
+                _form.Title.Trim(),
+                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                _entry.Summary,
+                _entry.Transcript,
+                tags);
+
+            await EntryClient.UpdateAsync(EntryId, request);
+            NavigateBack();
+        }
+        catch
+        {
+            _saveError = "Could not save your updates. Please try again.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/entries");
+    }
+
+    private static string SerializeTags(IReadOnlyCollection<string> tags)
+        => tags is { Count: > 0 } ? string.Join(", ", tags) : string.Empty;
+
+    private static IReadOnlyCollection<string> ParseTags(string? tagsText)
+    {
+        if (string.IsNullOrWhiteSpace(tagsText))
+        {
+            return Array.Empty<string>();
+        }
+
+        var separators = new[] { ',', '\n' };
+        return tagsText
+            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(tag => tag.Trim())
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private sealed class EditEntryModel
+    {
+        [Required(ErrorMessage = "Title is required")]
+        public string Title { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public string Tags { get; set; } = string.Empty;
+    }
+}
