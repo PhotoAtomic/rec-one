@@ -214,6 +214,39 @@ docker compose up --build
 
 To override configuration inside the container, either mount a custom `appsettings.Production.json` or rely on environment variables (`Storage__RootDirectory`, `Authentication__OIDC__Authority`, etc.).
 
+### Building a multi-architecture image (x64 + Raspberry Pi 5)
+
+The provided `Dockerfile` is configured to produce Native AOT images for both `linux/amd64` and `linux/arm64` (Raspberry Pi 5) using Docker Buildx. This lets you publish a single image tag that works on standard 64-bit Linux hosts and on a Pi 5.
+
+First, create and bootstrap a buildx builder (one-time setup):
+
+```bash
+docker buildx create --name diaryapp-multi --use
+docker buildx inspect --bootstrap
+```
+
+Then build and push a multi-architecture image (replace `your-registry` as needed, e.g., `photoatomic` for Docker Hub):
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t your-registry/rec-one-diaryapp:latest \
+  -t your-registry/rec-one-diaryapp:1.0.0 \
+  --push .
+```
+
+- On a standard 64-bit Linux machine, `docker pull your-registry/rec-one-diaryapp:latest` will fetch the `linux/amd64` variant.
+- On a Raspberry Pi 5, the same tag resolves to `linux/arm64`.
+
+You can then reference this image from `docker-compose.yml` instead of building locally:
+
+```yaml
+services:
+  diaryapp:
+    image: your-registry/rec-one-diaryapp:latest
+    # other settings (ports, volumes, environment) unchanged
+```
+
 ## Next steps
 
 Upgrade to .NET 10

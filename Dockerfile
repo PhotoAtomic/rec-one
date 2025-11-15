@@ -1,6 +1,8 @@
 # Build stage based on the .NET SDK image
 FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim AS build
 
+ARG TARGETARCH
+
 # Install native toolchain and workloads needed for AOT and Blazor
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang zlib1g-dev python3 python-is-python3 \
@@ -16,16 +18,31 @@ COPY src/DiaryApp.Shared/DiaryApp.Shared.csproj DiaryApp.Shared/
 RUN dotnet restore DiaryApp.Server/DiaryApp.Server.csproj
 
 COPY src/ ./
-RUN dotnet publish DiaryApp.Server/DiaryApp.Server.csproj \
-    -c Release \
-    -p:PublishProfile=LinuxAot \
-    -o /app/publish
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+      dotnet publish DiaryApp.Server/DiaryApp.Server.csproj \
+        -c Release \
+        -p:PublishProfile=LinuxAot \
+        -o /app/publish; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+      dotnet publish DiaryApp.Server/DiaryApp.Server.csproj \
+        -c Release \
+        -p:PublishProfile=LinuxAotArm64 \
+        -o /app/publish; \
+    else \
+      echo "Unsupported TARGETARCH: $TARGETARCH" && exit 1; \
+    fi
 
 # Stage that fetches a minimal static ffmpeg build
 FROM debian:bookworm-slim AS ffmpeg
+ARG TARGETARCH
 RUN apt-get update \
     && apt-get install -y --no-install-recommends wget ca-certificates xz-utils \
-    && wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -O /tmp/ffmpeg.tar.xz \
+    && case "$TARGETARCH" in \
+         amd64) FFMPEG_ARCH=amd64 ;; \
+         arm64) FFMPEG_ARCH=arm64 ;; \
+         *) echo "Unsupported TARGETARCH for ffmpeg: $TARGETARCH" && exit 1 ;; \
+       esac \
+    && wget "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz" -O /tmp/ffmpeg.tar.xz \
     && mkdir /ffmpeg \
     && tar -xJf /tmp/ffmpeg.tar.xz -C /ffmpeg --strip-components=1 \
     && rm -rf /var/lib/apt/lists/* /tmp/ffmpeg.tar.xz
