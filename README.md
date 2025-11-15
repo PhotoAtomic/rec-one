@@ -230,15 +230,52 @@ services:
 
 For camera/microphone access from devices on your network, browsers require a secure context (HTTPS). You can terminate TLS directly in Kestrel by mounting a certificate into the container and configuring endpoints via environment variables.
 
-1. Create a self-signed certificate (example using OpenSSL, adjust CN and paths as needed):
+#### Generating a browser-valid certificate for `rec-one.local`
+
+Modern browsers require a Subject Alternative Name (SAN) on certificates and, on Windows, the issuing certificate must be explicitly trusted under **Trusted Root Certification Authorities**. The following steps create a self-signed certificate that satisfies those requirements.
+
+1. Create a minimal OpenSSL config with SAN support, e.g. `certs/rec-one.cnf`:
+
+   ```ini
+   [req]
+   default_bits       = 2048
+   prompt             = no
+   default_md         = sha256
+   x509_extensions    = v3_req
+   distinguished_name = dn
+
+   [dn]
+   CN = rec-one.local
+
+   [v3_req]
+   subjectAltName = @alt_names
+   basicConstraints = CA:true
+   keyUsage = keyCertSign, cRLSign, digitalSignature, keyEncipherment
+   extendedKeyUsage = serverAuth
+
+   [alt_names]
+   DNS.1 = rec-one.local
+   ```
+
+   - `[dn]` sets the common name to `rec-one.local`.
+   - `subjectAltName` and `[alt_names]` ensure the certificate is explicitly valid for the hostname `rec-one.local`.
+   - `basicConstraints` and `keyUsage` mark it as a self-signed CA-style certificate that Windows can treat as a trusted root when imported.
+
+2. Generate the key and certificate using that config:
 
    ```bash
    mkdir certs
    openssl req -x509 -newkey rsa:2048 -nodes \
      -keyout certs/rec-one.key \
      -out certs/rec-one.crt \
-     -subj "/CN=rec-one.local" -days 365
+     -days 365 \
+     -config certs/rec-one.cnf \
+     -extensions v3_req
+   ```
 
+3. Create a PFX bundle for Kestrel:
+
+   ```bash
    openssl pkcs12 -export \
      -in certs/rec-one.crt \
      -inkey certs/rec-one.key \
@@ -247,9 +284,15 @@ For camera/microphone access from devices on your network, browsers require a se
      -password pass:yourpassword
    ```
 
-   Import and trust the resulting certificate on your client devices so browsers accept `https://rec-one.local` without warnings.
+4. On Windows, import and trust the certificate:
 
-2. Mount the PFX in Docker Compose and configure Kestrel (see `docker-compose.yml` in this repo for a ready-to-use example):
+   - Use the `.crt` file (`certs/rec-one.crt`), not just the `.pfx`.
+   - Run the certificate import wizard **for the current user**, choose **Place all certificates in the following store**, and explicitly select **Trusted Root Certification Authorities**.
+   - Do **not** use the wizard’s “Automatically select the certificate store” option, as it may place the certificate in a personal store that does not make `https://rec-one.local` fully trusted.
+
+   After import, restart your browser and confirm that `https://rec-one.local` shows as secure (no certificate warning).
+
+5. Mount the PFX in Docker Compose and configure Kestrel (see `docker-compose.yml` in this repo for a ready-to-use example):
 
    ```yaml
    services:

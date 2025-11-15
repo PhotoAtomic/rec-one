@@ -54,8 +54,9 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-noble-chiseled AS runtime
 USER 0
 WORKDIR /app
 
-# Provide ffmpeg in a fixed location used by the app configuration (/usr/bin/ffmpeg)
-COPY --from=ffmpeg /ffmpeg/ffmpeg /usr/bin/ffmpeg
+# Provide ffmpeg tools (ffmpeg, ffprobe, etc.) in a fixed location
+# used by the app configuration and Xabe.FFmpeg (/usr/bin)
+COPY --from=ffmpeg /ffmpeg/ /usr/bin/
 
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
