@@ -15,9 +15,10 @@
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
-*.webm
 entries.json
 **/data/entries/**/*.txt
+**/data/entries/**/*.embeddings
+**/data/entries/**/*.webm
 /keys/**/*
 # Mono auto generated files
 mono_crash.*
