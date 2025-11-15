@@ -214,6 +214,56 @@ docker compose up --build
 
 To override configuration inside the container, either mount a custom `appsettings.Production.json` or rely on environment variables (`Storage__RootDirectory`, `Authentication__OIDC__Authority`, etc.).
 
+### Enabling HTTPS with a local certificate
+
+For camera/microphone access from devices on your network, browsers require a secure context (HTTPS). You can terminate TLS directly in Kestrel by mounting a certificate into the container and configuring endpoints via environment variables.
+
+1. Create a self-signed certificate (example using OpenSSL, adjust CN and paths as needed):
+
+   ```bash
+   mkdir certs
+   openssl req -x509 -newkey rsa:2048 -nodes \
+     -keyout certs/rec-one.key \
+     -out certs/rec-one.crt \
+     -subj "/CN=rec-one.local" -days 365
+
+   openssl pkcs12 -export \
+     -in certs/rec-one.crt \
+     -inkey certs/rec-one.key \
+     -out certs/rec-one.pfx \
+     -name rec-one \
+     -password pass:yourpassword
+   ```
+
+   Import and trust the resulting certificate on your client devices so browsers accept `https://rec-one.local` without warnings.
+
+2. Mount the PFX in Docker Compose and configure Kestrel (see `docker-compose.yml` in this repo for a ready-to-use example):
+
+   ```yaml
+   services:
+     diaryapp:
+       # build: .        # or use a pre-built image
+       container_name: rec-one
+       ports:
+         - "80:80"
+         - "443:443"
+       environment:
+         ASPNETCORE_ENVIRONMENT: Production
+         ASPNETCORE_URLS: ""
+         Kestrel__Endpoints__Http__Url: http://+:80
+         Kestrel__Endpoints__Https__Url: https://+:443
+         Kestrel__Endpoints__Https__Certificate__Path: /https/rec-one.pfx
+         Kestrel__Endpoints__Https__Certificate__Password: <pfx-password>
+         Storage__RootDirectory: /data/entries
+         # ...other settings as needed...
+       volumes:
+         - ./data:/data/entries
+         - ./keys:/root/.local/share/DiaryApp/keys
+         - ./certs:/https:ro
+   ```
+
+After starting the stack with `docker compose up -d`, you can access the app over HTTPS at your chosen host name (for example `https://rec-one.local/`), and modern browsers will allow webcam access once the certificate is trusted.
+
 ### Building a multi-architecture image (x64 + Raspberry Pi 5)
 
 The provided `Dockerfile` is configured to produce Native AOT images for both `linux/amd64` and `linux/arm64` (Raspberry Pi 5) using Docker Buildx. This lets you publish a single image tag that works on standard 64-bit Linux hosts and on a Pi 5.

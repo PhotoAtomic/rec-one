@@ -3,9 +3,18 @@ services:
     build: .
     container_name: rec-one
     ports:
-      - "8080:8080"
+      - "80:80"
+      - "443:443"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Override default HTTP URL binding so Kestrel uses explicit endpoints below
+      ASPNETCORE_URLS: ""
+      # Kestrel HTTP/HTTPS endpoints (for local HTTPS with a mounted certificate)
+      # Adjust host name and certificate path/password as needed for your environment.
+      Kestrel__Endpoints__Http__Url: http://+:80
+      Kestrel__Endpoints__Https__Url: https://+:443
+      Kestrel__Endpoints__Https__Certificate__Path: /https/rec-one.pfx
+      Kestrel__Endpoints__Https__Certificate__Password: <pfx-password>
       Storage__RootDirectory: /data/entries
       # Authentication__OIDC__Authority: https://login.microsoftonline.com/<tenant-id>/v2.0
       # Authentication__OIDC__ClientId: <client-id>
@@ -56,3 +65,5 @@ services:
     volumes:
       - ./data:/data/entries
       - ./keys:/root/.local/share/DiaryApp/keys
+      # Mount a local certificate directory; expected file: ./certs/rec-one.pfx
+      - ./certs:/https:ro
