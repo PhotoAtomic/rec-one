@@ -226,6 +226,15 @@ video {
     font-size: 0.9rem;
 }
 
+.entry-card__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.3rem 0 0;
+    font-size: 0.85rem;
+    color: #cfd8dc;
+}
+
 .entry-card__tags {
     margin: 0.75rem 0;
 }
@@ -392,6 +401,8 @@ button.icon-button.danger:hover {
 }
 
 .button-spinner {
+    display: inline-block;
+    vertical-align: middle;
     width: 1.1em;
     height: 1.1em;
     border-radius: 50%;

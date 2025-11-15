@@ -36,6 +36,8 @@ builder.Services.AddSingleton<ITitleGenerator, TitleGenerator>();
 builder.Services.AddSingleton<ITagSuggestionGenerator, TagSuggestionGenerator>();
 builder.Services.AddSingleton<IDescriptionEmbeddingGenerator, DescriptionEmbeddingGenerator>();
 builder.Services.AddSingleton<ISearchIndex, InMemorySearchIndex>();
+builder.Services.AddSingleton<IEntryProcessingQueue, EntryProcessingQueue>();
+builder.Services.AddHostedService<EntryProcessingBackgroundService>();
 builder.Services.AddHttpContextAccessor();
 
 var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
@@ -150,11 +152,8 @@ entries.MapGet("/{id:guid}", async (Guid id, IVideoEntryStore store, Cancellatio
 entries.MapPost("/", async (
     HttpRequest request,
     IVideoEntryStore store,
-    ITranscriptGenerator transcripts,
-    ISummaryGenerator summaries,
-    ITitleGenerator titles,
     ISearchIndex searchIndex,
-    ITagSuggestionGenerator tagSuggestions,
+    IEntryProcessingQueue processingQueue,
     IOptions<TranscriptOptions> transcriptOptions,
     IOptions<SummaryOptions> summaryOptions,
     IOptions<TitleGenerationOptions> titleOptions,
@@ -191,82 +190,16 @@ entries.MapPost("/", async (
     var summaryEnabled = summaryOptionsValue.Enabled && !string.IsNullOrWhiteSpace(summaryOptionsValue.Provider);
     var titleGenerationEnabled = titleOptionsValue.Enabled && !string.IsNullOrWhiteSpace(titleOptionsValue.Provider);
     var tagSuggestionsEnabled = tagOptionsValue.Enabled && !string.IsNullOrWhiteSpace(tagOptionsValue.Provider);
+    var anyProcessing = transcriptionEnabled || summaryEnabled || titleGenerationEnabled || tagSuggestionsEnabled;
 
-    string? transcript = null;
-    string? generatedTitle = null;
-    var finalDescription = normalizedDescription;
-    var finalTitle = normalizedTitle;
-
-    if (transcriptionEnabled)
+    if (anyProcessing)
     {
-        transcript = await transcripts.GenerateAsync(entry, cancellationToken);
-        if (string.IsNullOrWhiteSpace(transcript))
-        {
-            transcript = null;
-        }
-    }
-
-    if (summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
-    {
-        var generatedDescription = await summaries.SummarizeAsync(entry, transcript, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(generatedDescription))
-        {
-            finalDescription = generatedDescription;
-        }
-    }
-
-    if (titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(finalDescription))
-    {
-        generatedTitle = await titles.GenerateTitleAsync(entry, finalDescription, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(generatedTitle))
-        {
-            finalTitle = generatedTitle;
-        }
-        else
-        {
-            generatedTitle = null;
-        }
-    }
-
-    if (tagSuggestionsEnabled && !string.IsNullOrWhiteSpace(finalDescription))
-    {
-        var suggestedTags = await EntryEndpointHelpers.SuggestTagsAsync(
-            finalDescription,
-            tags,
-            store,
-            tagSuggestions,
-            cancellationToken);
-        if (suggestedTags.Count > 0)
-        {
-            tags = tags
-                .Concat(suggestedTags)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-    }
-
-    var descriptionChanged = !string.Equals(
-        finalDescription ?? string.Empty,
-        normalizedDescription ?? string.Empty,
-        StringComparison.Ordinal);
-    var tagsChanged = !EntryEndpointHelpers.TagsEqual(tags, entry.Tags);
-
-    if (transcript is not null || generatedTitle is not null || descriptionChanged || tagsChanged)
-    {
-        var updatedRequest = EntryEndpointHelpers.Normalize(new VideoEntryUpdateRequest(
-            finalTitle,
-            finalDescription,
-            null,
-            transcript,
-            tags));
-        await store.UpdateAsync(entry.Id, updatedRequest, cancellationToken);
+        await store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
+        processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
         entry = (await store.GetAsync(entry.Id, cancellationToken))!;
     }
 
-    var indexEntry = string.IsNullOrWhiteSpace(transcript)
-        ? entry
-        : entry with { Transcript = transcript };
-    await searchIndex.IndexAsync(indexEntry, cancellationToken);
+    await searchIndex.IndexAsync(entry, cancellationToken);
 
     logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
 

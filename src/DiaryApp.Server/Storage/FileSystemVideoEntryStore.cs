@@ -43,7 +43,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<VideoEntryDto> SaveAsync(Stream videoStream, string originalFileName, VideoEntryUpdateRequest metadata, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
-        await EnsureInitializedAsync(userSegment, cancellationToken);
+        await EnsureInitializedAsync(userSegment, cancellationToken).ConfigureAwait(false);
 
         var id = Guid.NewGuid();
         var startedAt = DateTimeOffset.UtcNow;
@@ -63,7 +63,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
 
         var tags = metadata.Tags?.ToArray() ?? Array.Empty<string>();
-        var embedding = await GenerateEmbeddingAsync(metadata.Description, cancellationToken);
+        var embedding = await GenerateEmbeddingAsync(metadata.Description, cancellationToken).ConfigureAwait(false);
         var record = new StoredVideoEntry(
             id,
             metadata.Title,
@@ -72,30 +72,31 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             filePath,
             startedAt,
             DateTimeOffset.UtcNow,
+            VideoEntryProcessingStatus.None,
             null);
 
         if (!string.IsNullOrWhiteSpace(metadata.Transcript))
         {
-            await TranscriptFileStore.WriteTranscriptAsync(filePath, metadata.Transcript, cancellationToken);
+            await TranscriptFileStore.WriteTranscriptAsync(filePath, metadata.Transcript, cancellationToken).ConfigureAwait(false);
         }
 
         if (embedding is not null)
         {
-            await EmbeddingFileStore.WriteEmbeddingAsync(filePath, embedding, cancellationToken);
+            await EmbeddingFileStore.WriteEmbeddingAsync(filePath, embedding, cancellationToken).ConfigureAwait(false);
         }
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var cache = GetOrCreateCache(userSegment);
             cache[record.Id] = record;
-            await PersistLockedAsync(userSegment, cancellationToken);
+            await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
-        return await ToDtoAsync(record, cancellationToken);
+        return await ToDtoAsync(record, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken)
@@ -104,7 +105,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
         StoredVideoEntry[] entries;
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var cache = GetOrCreateCache(userSegment);
@@ -137,7 +138,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             _gate.Release();
         }
 
-        return stored is null ? null : await ToDtoAsync(stored, cancellationToken);
+        return stored is null ? null : await ToDtoAsync(stored, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken)
@@ -145,7 +146,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var userSegment = GetCurrentUserSegment();
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var cache = GetOrCreateCache(userSegment);
@@ -156,7 +157,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     request.Description ?? string.Empty,
                     StringComparison.Ordinal);
                 var embedding = descriptionChanged
-                    ? await GenerateEmbeddingAsync(request.Description, cancellationToken)
+                    ? await GenerateEmbeddingAsync(request.Description, cancellationToken).ConfigureAwait(false)
                     : null;
 
                 var videoPath = EnsureFinalVideoPath(existing, request.Title);
@@ -174,15 +175,15 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
                 if (!string.IsNullOrWhiteSpace(request.Transcript))
                 {
-                    await TranscriptFileStore.WriteTranscriptAsync(updated.VideoPath, request.Transcript, cancellationToken);
+                    await TranscriptFileStore.WriteTranscriptAsync(updated.VideoPath, request.Transcript, cancellationToken).ConfigureAwait(false);
                 }
 
                 if (descriptionChanged)
                 {
-                    await EmbeddingFileStore.WriteEmbeddingAsync(updated.VideoPath, embedding, cancellationToken);
+                    await EmbeddingFileStore.WriteEmbeddingAsync(updated.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
                 }
 
-                await PersistLockedAsync(userSegment, cancellationToken);
+                await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -198,7 +199,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         StoredVideoEntry? removed = null;
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var cache = GetOrCreateCache(userSegment);
@@ -208,7 +209,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             }
 
             cache.Remove(id);
-            await PersistLockedAsync(userSegment, cancellationToken);
+            await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -230,7 +231,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var userSegment = GetCurrentUserSegment();
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return GetOrCreatePreferences(userSegment);
@@ -263,7 +264,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var userSegment = GetCurrentUserSegment();
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var cache = GetOrCreateCache(userSegment);
@@ -274,7 +275,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
             if (embedding is not null)
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(existing.VideoPath, embedding, cancellationToken);
+                await EmbeddingFileStore.WriteEmbeddingAsync(existing.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -282,7 +283,30 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             }
 
             cache[id] = existing with { DescriptionEmbedding = null };
-            await PersistLockedAsync(userSegment, cancellationToken);
+            await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task UpdateProcessingStatusAsync(Guid id, VideoEntryProcessingStatus status, CancellationToken cancellationToken)
+    {
+        var userSegment = GetCurrentUserSegment();
+        await EnsureInitializedAsync(userSegment, cancellationToken).ConfigureAwait(false);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var cache = GetOrCreateCache(userSegment);
+            if (!cache.TryGetValue(id, out var existing))
+            {
+                return;
+            }
+
+            cache[id] = existing with { ProcessingStatus = status };
+            await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -299,7 +323,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         try
         {
-            return await _embeddingGenerator.GenerateEmbeddingAsync(description, cancellationToken);
+            return await _embeddingGenerator.GenerateEmbeddingAsync(description, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -315,7 +339,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             return;
         }
 
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_initializedUsers.Contains(userSegment))
@@ -326,7 +350,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             var cache = GetOrCreateCache(userSegment);
             var indexFile = GetIndexFile(userSegment);
             Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
-            var document = await ReadDocumentAsync(indexFile, cancellationToken);
+            var document = await ReadDocumentAsync(indexFile, cancellationToken).ConfigureAwait(false);
             foreach (var record in document.Entries)
             {
                 if (!string.IsNullOrWhiteSpace(record.DescriptionEmbedding))
@@ -334,7 +358,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     var legacyEmbedding = EmbeddingSerializer.DeserializeLegacy(record.DescriptionEmbedding);
                     if (legacyEmbedding is not null && !string.IsNullOrWhiteSpace(record.VideoPath))
                     {
-                        await EmbeddingFileStore.WriteEmbeddingAsync(record.VideoPath, legacyEmbedding, cancellationToken);
+                        await EmbeddingFileStore.WriteEmbeddingAsync(record.VideoPath, legacyEmbedding, cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -342,7 +366,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             }
             _preferencesByUser[userSegment] = document.Preferences;
 
-            await PersistLockedAsync(userSegment, cancellationToken);
+            await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
             _initializedUsers.Add(userSegment);
         }
         finally
@@ -366,7 +390,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         try
         {
-            var document = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken);
+            var document = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken).ConfigureAwait(false);
             return NormalizeStoredDocument(document);
         }
         catch (JsonException)
@@ -374,17 +398,17 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             stream.Position = 0;
             try
             {
-                var legacyDocument = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken);
-                return await ConvertLegacyDocumentAsync(legacyDocument, cancellationToken);
+                var legacyDocument = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken).ConfigureAwait(false);
+                return await ConvertLegacyDocumentAsync(legacyDocument, cancellationToken).ConfigureAwait(false);
             }
             catch (JsonException)
             {
                 stream.Position = 0;
                 try
                 {
-                    var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken)
+                    var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken).ConfigureAwait(false)
                         ?? Array.Empty<VideoEntryDto>();
-                    return await ConvertLegacyEntriesAsync(entries, UserMediaPreferences.Default, cancellationToken);
+                    return await ConvertLegacyEntriesAsync(entries, UserMediaPreferences.Default, cancellationToken).ConfigureAwait(false);
                 }
                 catch (JsonException)
                 {
@@ -402,7 +426,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var indexFile = GetIndexFile(userSegment);
         Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
         await using var stream = File.Create(indexFile);
-        await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<StoredUserEntriesDocument> ConvertLegacyDocumentAsync(UserEntriesDocument? document, CancellationToken cancellationToken)
@@ -414,7 +438,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         var preferences = NormalizePreferences(document.Preferences);
         var entries = document.Entries ?? Array.Empty<VideoEntryDto>();
-        return await ConvertLegacyEntriesAsync(entries, preferences, cancellationToken);
+        return await ConvertLegacyEntriesAsync(entries, preferences, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<StoredUserEntriesDocument> ConvertLegacyEntriesAsync(
@@ -430,10 +454,10 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var converted = new List<StoredVideoEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            await MigrateTranscriptAsync(entry, cancellationToken);
+            await MigrateTranscriptAsync(entry, cancellationToken).ConfigureAwait(false);
             if (entry.DescriptionEmbedding is { Length: > 0 } && !string.IsNullOrWhiteSpace(entry.VideoPath))
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, entry.DescriptionEmbedding, cancellationToken);
+                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, entry.DescriptionEmbedding, cancellationToken).ConfigureAwait(false);
             }
             converted.Add(ToStored(entry));
         }
@@ -469,6 +493,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             entry.VideoPath,
             entry.StartedAt,
             entry.CompletedAt,
+            VideoEntryProcessingStatus.Completed,
             null);
     }
 
@@ -479,7 +504,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var results = new List<VideoEntryDto>(entries.Count);
         foreach (var entry in entries)
         {
-            results.Add(await ToDtoAsync(entry, cancellationToken));
+            results.Add(await ToDtoAsync(entry, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
@@ -493,23 +518,23 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             embedding = EmbeddingSerializer.DeserializeLegacy(entry.DescriptionEmbedding);
             if (embedding is not null && !string.IsNullOrWhiteSpace(entry.VideoPath))
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken);
+                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
         }
 
         if (embedding is null && !string.IsNullOrWhiteSpace(entry.VideoPath))
         {
-            embedding = await EmbeddingFileStore.ReadEmbeddingAsync(entry.VideoPath, cancellationToken);
+            embedding = await EmbeddingFileStore.ReadEmbeddingAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
         }
 
         if (embedding is null &&
             !string.IsNullOrWhiteSpace(entry.Description) &&
             !string.IsNullOrWhiteSpace(entry.VideoPath))
         {
-            embedding = await GenerateEmbeddingAsync(entry.Description, cancellationToken);
+            embedding = await GenerateEmbeddingAsync(entry.Description, cancellationToken).ConfigureAwait(false);
             if (embedding is not null)
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken);
+                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -523,6 +548,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             entry.VideoPath,
             entry.StartedAt,
             entry.CompletedAt,
+            entry.ProcessingStatus,
             embedding);
     }
 
@@ -734,6 +760,8 @@ internal sealed record StoredVideoEntry(
     string VideoPath,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    VideoEntryProcessingStatus ProcessingStatus,
     [property: JsonConverter(typeof(DescriptionEmbeddingConverter))]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? DescriptionEmbedding = null);

@@ -25,6 +25,7 @@ public sealed class EntriesController : ControllerBase
     private readonly ITitleGenerator _titles;
     private readonly ISearchIndex _searchIndex;
     private readonly ITagSuggestionGenerator _tagSuggestions;
+    private readonly IEntryProcessingQueue _processingQueue;
     private readonly ILogger<EntriesController> _logger;
     private readonly bool _transcriptionEnabled;
     private readonly bool _summaryEnabled;
@@ -38,6 +39,7 @@ public sealed class EntriesController : ControllerBase
         ITitleGenerator titles,
         ISearchIndex searchIndex,
         ITagSuggestionGenerator tagSuggestions,
+        IEntryProcessingQueue processingQueue,
         ILogger<EntriesController> logger,
         IOptions<TranscriptOptions> transcriptOptions,
         IOptions<SummaryOptions> summaryOptions,
@@ -50,6 +52,7 @@ public sealed class EntriesController : ControllerBase
         _titles = titles;
         _searchIndex = searchIndex;
         _tagSuggestions = tagSuggestions;
+        _processingQueue = processingQueue;
         _logger = logger;
         _transcriptionEnabled = transcriptOptions.Value.Enabled && !string.IsNullOrWhiteSpace(transcriptOptions.Value.Provider);
         _summaryEnabled = summaryOptions.Value.Enabled && !string.IsNullOrWhiteSpace(summaryOptions.Value.Provider);
@@ -92,76 +95,15 @@ public sealed class EntriesController : ControllerBase
         var baseRequest = Normalize(new VideoEntryUpdateRequest(normalizedTitle, normalizedDescription, null, null, tags));
         var entry = await _store.SaveAsync(stream, file.FileName, baseRequest, cancellationToken);
 
-        string? transcript = null;
-        string? generatedTitle = null;
-        var finalDescription = normalizedDescription;
-        var finalTitle = normalizedTitle;
-
-        if (_transcriptionEnabled)
+        var anyProcessing = _transcriptionEnabled || _summaryEnabled || _titleGenerationEnabled || _tagSuggestionsEnabled;
+        if (anyProcessing)
         {
-            transcript = await _transcripts.GenerateAsync(entry, cancellationToken);
-            if (string.IsNullOrWhiteSpace(transcript))
-            {
-                transcript = null;
-            }
-        }
-
-        if (_summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
-        {
-            var generatedDescription = await _summaries.SummarizeAsync(entry, transcript, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(generatedDescription))
-            {
-                finalDescription = generatedDescription;
-            }
-        }
-
-        if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(finalDescription))
-        {
-            generatedTitle = await _titles.GenerateTitleAsync(entry, finalDescription, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(generatedTitle))
-            {
-                finalTitle = generatedTitle;
-            }
-            else
-            {
-                generatedTitle = null;
-            }
-        }
-
-        if (_tagSuggestionsEnabled && !string.IsNullOrWhiteSpace(finalDescription))
-        {
-            var suggestedTags = await SuggestTagsAsync(finalDescription, tags, cancellationToken);
-            if (suggestedTags.Count > 0)
-            {
-                tags = tags
-                    .Concat(suggestedTags)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
-        }
-
-        var descriptionChanged = !string.Equals(
-            finalDescription ?? string.Empty,
-            normalizedDescription ?? string.Empty,
-            StringComparison.Ordinal);
-        var tagsChanged = !TagsEqual(tags, entry.Tags);
-
-        if (transcript is not null || generatedTitle is not null || descriptionChanged || tagsChanged)
-        {
-            var updated = Normalize(new VideoEntryUpdateRequest(
-                finalTitle,
-                finalDescription,
-                null,
-                transcript,
-                tags));
-            await _store.UpdateAsync(entry.Id, updated, cancellationToken);
+            await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
+            _processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
             entry = (await _store.GetAsync(entry.Id, cancellationToken))!;
         }
 
-        var indexEntry = string.IsNullOrWhiteSpace(transcript)
-            ? entry
-            : entry with { Transcript = transcript };
-        await _searchIndex.IndexAsync(indexEntry, cancellationToken);
+        await _searchIndex.IndexAsync(entry, cancellationToken);
 
         _logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
         return CreatedAtRoute(GetEntryRouteName, new { id = entry.Id }, entry);

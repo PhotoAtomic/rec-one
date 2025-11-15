@@ -4,6 +4,14 @@ using System.Text.Json.Serialization;
 
 namespace DiaryApp.Shared.Abstractions;
 
+public enum VideoEntryProcessingStatus
+{
+    None = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3
+}
+
 public record VideoEntryDto(
     Guid Id,
     string Title,
@@ -14,6 +22,7 @@ public record VideoEntryDto(
     string VideoPath,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
+    VideoEntryProcessingStatus ProcessingStatus = VideoEntryProcessingStatus.None,
     [property: JsonIgnore] float[]? DescriptionEmbedding = null);
 
 public record VideoEntryUpdateRequest(

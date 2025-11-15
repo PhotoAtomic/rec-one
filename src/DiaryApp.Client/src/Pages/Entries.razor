@@ -1,4 +1,5 @@
 @page "/entries"
+@implements IDisposable
 @inject IVideoEntryClient EntryClient
 @inject ISearchClient SearchClient
 @inject ITranscriptionClient TranscriptionClient
@@ -29,6 +30,13 @@ else
                     <div>
                         <h3>@entry.Title</h3>
                         <p class="entry-card__timestamp">@entry.StartedAt.ToLocalTime().ToString("f")</p>
+                        @if (entry.ProcessingStatus == VideoEntryProcessingStatus.InProgress)
+                        {
+                            <p class="entry-card__status">
+                                <span class="button-spinner" aria-hidden="true"></span>
+                                <span>AI processing in progress...</span>
+                            </p>
+                        }
                     </div>
                     <div class="entry-card__header-actions">
                         <div class="entry-card__header-buttons">
@@ -117,10 +125,15 @@ else
     private readonly Dictionary<Guid, string> _transcripts = new();
     private readonly HashSet<Guid> _loadingTranscripts = new();
     private readonly HashSet<Guid> _deletingEntries = new();
+    private readonly HashSet<Guid> _processingEntries = new();
+    private CancellationTokenSource? _pollingCts;
+    private Task? _pollingTask;
 
     protected override async Task OnInitializedAsync()
     {
         _results = await EntryClient.ListAsync();
+        UpdateProcessingEntries();
+        StartPollingIfNeeded();
     }
 
     private async Task Search()
@@ -145,6 +158,9 @@ else
 
             _results = entries;
         }
+
+        UpdateProcessingEntries();
+        StartPollingIfNeeded();
     }
 
     private async Task LoadTranscript(Guid id)
@@ -200,5 +216,115 @@ else
         {
             _deletingEntries.Remove(id);
         }
+    }
+
+    private void UpdateProcessingEntries()
+    {
+        _processingEntries.Clear();
+        if (_results is null)
+        {
+            return;
+        }
+
+        foreach (var entry in _results)
+        {
+            if (entry.ProcessingStatus == VideoEntryProcessingStatus.InProgress)
+            {
+                _processingEntries.Add(entry.Id);
+            }
+        }
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        if (_processingEntries.Count == 0)
+        {
+            _pollingCts?.Cancel();
+            _pollingTask = null;
+            return;
+        }
+
+        if (_pollingTask is not null && !_pollingTask.IsCompleted)
+        {
+            return;
+        }
+
+        _pollingCts?.Cancel();
+        _pollingCts = new CancellationTokenSource();
+        _pollingTask = PollProcessingEntriesAsync(_pollingCts.Token);
+    }
+
+    private async Task PollProcessingEntriesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (_processingEntries.Count == 0)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+
+                if (_results is null)
+                {
+                    continue;
+                }
+
+                var updated = _results.ToList();
+                var ids = _processingEntries.ToArray();
+                foreach (var id in ids)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    var entry = await EntryClient.GetAsync(id, cancellationToken);
+                    if (entry is null)
+                    {
+                        updated.RemoveAll(e => e.Id == id);
+                        continue;
+                    }
+
+                    var index = updated.FindIndex(e => e.Id == id);
+                    if (index >= 0)
+                    {
+                        updated[index] = entry;
+                    }
+
+                    if (entry.ProcessingStatus != VideoEntryProcessingStatus.InProgress)
+                    {
+                        _processingEntries.Remove(id);
+                    }
+                }
+
+                _results = updated;
+                UpdateProcessingEntries();
+                await InvokeAsync(StateHasChanged);
+
+                if (_processingEntries.Count == 0)
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _pollingCts?.Cancel();
+        _pollingCts?.Dispose();
     }
 }
