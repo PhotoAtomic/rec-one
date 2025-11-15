@@ -58,6 +58,9 @@ dotnet run --project DiaryApp.Server/DiaryApp.Server.csproj
 
 Access the app at `https://localhost:5001` (or `http://localhost:5000`).
 
+> **Tip (media devices not showing):**  
+> If the Settings page does not list your camera/microphone devices the first time you open the app, it is usually because the browser has not yet granted permission. Start a quick recording from the main page so the browser prompts you to allow camera/mic access, then stop the recording immediately after granting permission (it does not matter if nothing useful was recorded). You can also click **Refresh devices** on the Settings page to re-enumerate devices after granting permission. Once permission is granted, the app will be able to enumerate and show all available media devices.
+
 ### Configuration
 
 Key settings live in `DiaryApp.Server/appsettings.json` (or any other ASP.NET Core configuration source). The most important ones are:
@@ -213,6 +216,15 @@ docker compose up --build
 ```
 
 To override configuration inside the container, either mount a custom `appsettings.Production.json` or rely on environment variables (`Storage__RootDirectory`, `Authentication__OIDC__Authority`, etc.).
+
+An official pre-built image is also published to Docker Hub as `photoatomic/rec-one-diaryapp`. You can use it directly instead of building locally:
+
+```yaml
+services:
+  diaryapp:
+    image: photoatomic/rec-one-diaryapp:latest
+    # other settings (ports, volumes, environment) unchanged
+```
 
 ### Enabling HTTPS with a local certificate
 

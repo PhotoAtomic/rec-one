@@ -240,6 +240,7 @@ else
     private bool _isSaving;
     private bool _isRefreshingDevices;
     private bool _deviceAccessGranted = true;
+    private bool _requestPermissionsOnFirstRender;
     private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
     private List<MediaDeviceInfo> _microphones = new();
@@ -253,13 +254,18 @@ else
     {
         if (firstRender)
         {
-            await RefreshDevices();
+            await RefreshDevices(_requestPermissionsOnFirstRender);
+            if (!_deviceAccessGranted)
+            {
+                await RefreshDevices(true);
+            }
         }
     }
 
     private async Task LoadPreferencesAsync()
     {
         var preferences = await MediaSettingsClient.GetMediaPreferencesAsync();
+        _requestPermissionsOnFirstRender = IsUnconfigured(preferences);
         _formModel.CameraDeviceId = NormalizeForInput(preferences.CameraDeviceId);
         _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
         _formModel.TranscriptLanguage = NormalizeLanguageForInput(preferences.TranscriptLanguage);
@@ -344,6 +350,20 @@ else
         return LanguageOptions.Any(option => string.Equals(option.Code, normalized, StringComparison.OrdinalIgnoreCase))
             ? normalized
             : UserMediaPreferences.Default.TranscriptLanguage;
+    }
+
+    private static bool IsUnconfigured(UserMediaPreferences preferences)
+    {
+        var hasCamera = !string.IsNullOrWhiteSpace(preferences.CameraDeviceId);
+        var hasMicrophone = !string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId);
+        var hasFavoriteTags = preferences.FavoriteTags is { Count: > 0 };
+        var language = NormalizeLanguageForInput(preferences.TranscriptLanguage);
+        var hasCustomLanguage = !string.Equals(
+            language,
+            UserMediaPreferences.Default.TranscriptLanguage,
+            StringComparison.OrdinalIgnoreCase);
+
+        return !hasCamera && !hasMicrophone && !hasFavoriteTags && !hasCustomLanguage;
     }
 
     private static IReadOnlyCollection<string> ParseFavoriteTags(string? value)
