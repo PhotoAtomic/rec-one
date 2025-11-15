@@ -7,10 +7,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Storage__RootDirectory: /data/entries
-      Authentication__OIDC__Authority: https://login.microsoftonline.com/<tenant-id>/v2.0
-      Authentication__OIDC__ClientId: <client-id>
-      Authentication__OIDC__ClientSecret: <client-secret>
-      Authentication__OIDC__ResponseType: code
+      # Authentication__OIDC__Authority: https://login.microsoftonline.com/<tenant-id>/v2.0
+      # Authentication__OIDC__ClientId: <client-id>
+      # Authentication__OIDC__ClientSecret: <client-secret>
+      # Authentication__OIDC__ResponseType: code
       Transcription__Enabled: "false"
       Transcription__Provider: AzureSpeech
       Transcription__Settings__SpeechKey: <speech-api-key>
