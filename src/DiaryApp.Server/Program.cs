@@ -358,12 +358,13 @@ settings.MapPut("/media", async (UserMediaPreferences preferences, IVideoEntrySt
 app.MapFallbackToFile("index.html");
 
 app.MapGet("/authentication/status", (HttpContext context) =>
-{
-    var principal = context.User;
-    var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
-    var name = isAuthenticated ? principal?.Identity?.Name : null;
-    return Results.Json(new UserStatusDto(isAuthenticated, name, authenticationConfigured));
-}).AllowAnonymous();
+  {
+      var principal = context.User;
+      var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
+      var name = isAuthenticated ? principal?.Identity?.Name : null;
+      var payload = new UserStatusDto(isAuthenticated, name, authenticationConfigured);
+      return Results.Json(payload, DiaryAppJsonSerializerContext.Default.UserStatusDto);
+  }).AllowAnonymous();
 
 if (authenticationConfigured)
 {

@@ -32,33 +32,25 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
       echo "Unsupported TARGETARCH: $TARGETARCH" && exit 1; \
     fi
 
-# Stage that fetches a minimal static ffmpeg build
-FROM debian:bookworm-slim AS ffmpeg
-ARG TARGETARCH
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends wget ca-certificates xz-utils \
-    && case "$TARGETARCH" in \
-         amd64) FFMPEG_ARCH=amd64 ;; \
-         arm64) FFMPEG_ARCH=arm64 ;; \
-         *) echo "Unsupported TARGETARCH for ffmpeg: $TARGETARCH" && exit 1 ;; \
-       esac \
-    && wget "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz" -O /tmp/ffmpeg.tar.xz \
-    && mkdir /ffmpeg \
-    && tar -xJf /tmp/ffmpeg.tar.xz -C /ffmpeg --strip-components=1 \
-    && rm -rf /var/lib/apt/lists/* /tmp/ffmpeg.tar.xz
-
-# Minimal runtime stage that executes the native binary
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-noble-chiseled AS runtime
+# Minimal runtime stage that executes the native binary (slim)
+FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-bookworm-slim AS runtime
 
 # Run as root to ensure write access to mounted volumes such as /data/entries
 USER 0
 WORKDIR /app
 
-# Provide ffmpeg tools (ffmpeg, ffprobe, etc.) in a fixed location
-# used by the app configuration and Xabe.FFmpeg (/usr/bin)
-COPY --from=ffmpeg /ffmpeg/ /usr/bin/
+# Install minimal native dependencies required by Azure Cognitive Services Speech SDK and FFmpeg
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libuuid1 \
+        ca-certificates \
+        libcurl4 \
+        libssl3 \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV ASPNETCORE_URLS=http://+:8080
+ENV Transcription__Settings__FFmpegPath=/usr/bin
 EXPOSE 8080
 
 VOLUME ["/data/entries"]

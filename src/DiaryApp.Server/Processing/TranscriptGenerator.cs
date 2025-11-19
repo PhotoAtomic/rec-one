@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
@@ -11,7 +12,6 @@ using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Xabe.FFmpeg;
 
 namespace DiaryApp.Server.Processing;
 
@@ -25,6 +25,7 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
     private readonly AzureSpeechSettings? _azureSettings;
     private readonly string? _ffmpegPath;
     private bool _ffmpegConfigured;
+    private string? _ffmpegExecutablePath;
     private readonly object _ffmpegInitGate = new();
 
     public TranscriptGenerator(
@@ -156,18 +157,33 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
             Path.GetTempPath(),
             $"diaryapp-audio-{Guid.NewGuid():N}.wav");
 
+        var ffmpegExecutable = _ffmpegExecutablePath ?? "ffmpeg";
+        var arguments = $"-y -i {QuotePath(videoPath)} -vn -acodec pcm_s16le -ar 16000 -ac 1 {QuotePath(outputFile)}";
+
         try
         {
-            var conversion = FFmpeg.Conversions.New();
-            conversion.SetOverwriteOutput(true);
-            conversion.AddParameter(
-                $"-y -i {QuotePath(videoPath)} -vn -acodec pcm_s16le -ar 16000 -ac 1 {QuotePath(outputFile)}");
-
-            await conversion.Start(cancellationToken);
-
-            if (!File.Exists(outputFile))
+            using var process = new Process
             {
-                throw new IOException($"FFmpeg reported success but output file '{outputFile}' was not created.");
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = ffmpegExecutable,
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0 || !File.Exists(outputFile))
+            {
+                var errorOutput = await process.StandardError.ReadToEndAsync();
+                throw new IOException(
+                    $"FFmpeg failed with exit code {process.ExitCode}. Output: {errorOutput}");
             }
 
             return (outputFile, true);
@@ -424,7 +440,16 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
 
             try
             {
-                FFmpeg.SetExecutablesPath(resolvedPath);
+                var ffmpegExecutableName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "ffmpeg.exe" : "ffmpeg";
+                var candidate = Path.Combine(resolvedPath, ffmpegExecutableName);
+                if (!File.Exists(candidate))
+                {
+                    var message = $"FFmpeg executable '{candidate}' not found even though directory '{resolvedPath}' exists.";
+                    _logger.LogError(message);
+                    throw new InvalidOperationException(message);
+                }
+
+                _ffmpegExecutablePath = candidate;
                 _ffmpegConfigured = true;
                 _logger.LogInformation("FFmpeg executables resolved at '{Path}'.", resolvedPath);
             }
