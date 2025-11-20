@@ -43,7 +43,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi
 
 # Minimal runtime stage for the native binary
-FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
 ARG TARGETPLATFORM
 
 # Run as root to ensure write access to mounted volumes such as /data/entries
