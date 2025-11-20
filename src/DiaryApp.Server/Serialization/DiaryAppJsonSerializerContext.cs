@@ -4,6 +4,7 @@ using DiaryApp.Server.Processing;
 using DiaryApp.Server.Storage;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Mvc;
+using DiaryApp.Server;
 
 namespace DiaryApp.Server.Serialization;
 
@@ -26,6 +27,10 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(IReadOnlyCollection<VideoEntrySearchResult>))]
 [JsonSerializable(typeof(UserStatusDto))]
 [JsonSerializable(typeof(TagSuggestionRequest))]
+[JsonSerializable(typeof(ChunkedUploadStartRequest))]
+[JsonSerializable(typeof(ChunkedUploadStartResponse))]
+[JsonSerializable(typeof(ChunkedUploadCompleteRequest))]
+[JsonSerializable(typeof(UploadChunkResponse))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 internal partial class DiaryAppJsonSerializerContext : JsonSerializerContext;

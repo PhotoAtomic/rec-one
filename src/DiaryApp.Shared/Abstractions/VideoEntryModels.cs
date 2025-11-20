@@ -102,3 +102,9 @@ public record UserEntriesDocument(
 {
     public static readonly UserEntriesDocument Empty = new(Array.Empty<VideoEntryDto>(), UserMediaPreferences.Default);
 }
+
+public record ChunkedUploadStartRequest(string FileName, long TotalBytes);
+
+public record ChunkedUploadStartResponse(Guid UploadId);
+
+public record ChunkedUploadCompleteRequest(string Title, string? Description, string? Tags);

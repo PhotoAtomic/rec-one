@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using DiaryApp.Server;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
 using DiaryApp.Server.Storage;
@@ -37,6 +38,7 @@ builder.Services.AddSingleton<ITagSuggestionGenerator, TagSuggestionGenerator>()
 builder.Services.AddSingleton<IDescriptionEmbeddingGenerator, DescriptionEmbeddingGenerator>();
 builder.Services.AddSingleton<ISearchIndex, InMemorySearchIndex>();
 builder.Services.AddSingleton<IEntryProcessingQueue, EntryProcessingQueue>();
+builder.Services.AddSingleton<ChunkedUploadStore>();
 builder.Services.AddHostedService<EntryProcessingBackgroundService>();
 builder.Services.AddHttpContextAccessor();
 
@@ -136,6 +138,112 @@ if (authenticationConfigured)
 }
 
 var entries = api.MapGroup("/entries");
+var uploads = entries.MapGroup("/uploads");
+
+uploads.MapPost("/start", (ChunkedUploadStartRequest request, ChunkedUploadStore uploadStore) =>
+{
+    if (string.IsNullOrWhiteSpace(request.FileName))
+    {
+        return Results.BadRequest("File name is required.");
+    }
+
+    if (request.TotalBytes <= 0)
+    {
+        return Results.BadRequest("TotalBytes must be greater than zero.");
+    }
+
+    var session = uploadStore.Start(request.FileName, request.TotalBytes);
+    return Results.Ok(new ChunkedUploadStartResponse(session.Id));
+});
+
+uploads.MapPost("/{id:guid}/chunk", async (
+    Guid id,
+    HttpRequest httpRequest,
+    ChunkedUploadStore uploadStore,
+    CancellationToken cancellationToken) =>
+{
+    var offset = ParseHeaderLong(httpRequest.Headers, "X-Upload-Offset", -1);
+    var totalBytes = ParseHeaderLong(httpRequest.Headers, "X-Upload-Total", 0);
+    var uploaded = await uploadStore.AppendChunkAsync(id, httpRequest.Body, offset, totalBytes, cancellationToken);
+    return uploaded is null ? Results.NotFound() : Results.Ok(new UploadChunkResponse(uploaded.Value));
+});
+
+uploads.MapPost("/{id:guid}/complete", async (
+    Guid id,
+    ChunkedUploadCompleteRequest request,
+    ChunkedUploadStore uploadStore,
+    IVideoEntryStore store,
+    ISearchIndex searchIndex,
+    IEntryProcessingQueue processingQueue,
+    IOptions<TranscriptOptions> transcriptOptions,
+    IOptions<SummaryOptions> summaryOptions,
+    IOptions<TitleGenerationOptions> titleOptions,
+    IOptions<TagSuggestionOptions> tagOptions,
+    ILogger<Program> logger,
+    CancellationToken cancellationToken) =>
+{
+    var session = uploadStore.Complete(id);
+    if (session is null || string.IsNullOrWhiteSpace(session.TempFilePath) || !File.Exists(session.TempFilePath))
+    {
+        return Results.NotFound();
+    }
+    if (session.UploadedBytes <= 0)
+    {
+        TryDeleteFile(session.TempFilePath);
+        return Results.BadRequest("Upload did not contain any data.");
+    }
+
+    var rawTitle = request.Title;
+    var rawDescription = request.Description;
+    var tags = EntryEndpointHelpers.ParseTags(request.Tags).ToList();
+
+    var userProvidedTitle = !string.IsNullOrWhiteSpace(rawTitle);
+    var normalizedTitle = string.IsNullOrWhiteSpace(rawTitle) ? "Untitled" : rawTitle!.Trim();
+    var normalizedDescription = string.IsNullOrWhiteSpace(rawDescription) ? null : rawDescription!.Trim();
+
+    var uploadedBytes = session.UploadedBytes;
+    try
+    {
+        await using var stream = File.OpenRead(session.TempFilePath);
+        var baseRequest = EntryEndpointHelpers.Normalize(new VideoEntryUpdateRequest(normalizedTitle, normalizedDescription, null, null, tags));
+        var entry = await store.SaveAsync(stream, session.OriginalFileName, baseRequest, cancellationToken);
+
+        var transcriptOptionsValue = transcriptOptions.Value;
+        var summaryOptionsValue = summaryOptions.Value;
+        var titleOptionsValue = titleOptions.Value;
+        var tagOptionsValue = tagOptions.Value;
+
+        var transcriptionEnabled = transcriptOptionsValue.Enabled && !string.IsNullOrWhiteSpace(transcriptOptionsValue.Provider);
+        var summaryEnabled = summaryOptionsValue.Enabled && !string.IsNullOrWhiteSpace(summaryOptionsValue.Provider);
+        var titleGenerationEnabled = titleOptionsValue.Enabled && !string.IsNullOrWhiteSpace(titleOptionsValue.Provider);
+        var tagSuggestionsEnabled = tagOptionsValue.Enabled && !string.IsNullOrWhiteSpace(tagOptionsValue.Provider);
+        var anyProcessing = transcriptionEnabled || summaryEnabled || titleGenerationEnabled || tagSuggestionsEnabled;
+
+        if (anyProcessing)
+        {
+            await store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
+            processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+            entry = (await store.GetAsync(entry.Id, cancellationToken))!;
+        }
+
+        await searchIndex.IndexAsync(entry, cancellationToken);
+
+        logger.LogInformation(
+            "Completed chunked upload {UploadId} into entry {EntryId} ({Uploaded} bytes)",
+            id,
+            entry.Id,
+            uploadedBytes);
+
+        return Results.Created($"/api/entries/{entry.Id}", entry);
+    }
+    finally
+    {
+        TryDeleteFile(session.TempFilePath);
+    }
+});
+
+uploads.MapDelete("/{id:guid}", (Guid id, ChunkedUploadStore uploadStore)
+    => uploadStore.Cancel(id) ? Results.NoContent() : Results.NotFound());
 
 entries.MapGet("/", async (IVideoEntryStore store, CancellationToken cancellationToken) =>
 {
@@ -385,6 +493,33 @@ if (authenticationConfigured)
 }
 
 app.Run();
+
+static long ParseHeaderLong(IHeaderDictionary headers, string key, long defaultValue)
+    => headers.TryGetValue(key, out var values) && long.TryParse(values, out var parsed)
+        ? parsed
+        : defaultValue;
+
+static void TryDeleteFile(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return;
+    }
+
+    try
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+    catch (IOException)
+    {
+    }
+    catch (UnauthorizedAccessException)
+    {
+    }
+}
 
 internal static class EntryEndpointHelpers
 {

@@ -10,6 +10,10 @@ public interface IVideoEntryClient
     Task<VideoEntryDto> CreateAsync(MultipartFormDataContent content, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken = default);
     Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ChunkedUploadStartResponse> StartUploadAsync(ChunkedUploadStartRequest request, CancellationToken cancellationToken = default);
+    Task UploadChunkAsync(Guid uploadId, Stream chunkStream, long chunkOffset, long totalBytes, CancellationToken cancellationToken = default);
+    Task<VideoEntryDto> CompleteUploadAsync(Guid uploadId, ChunkedUploadCompleteRequest request, CancellationToken cancellationToken = default);
+    Task CancelUploadAsync(Guid uploadId, CancellationToken cancellationToken = default);
     Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
