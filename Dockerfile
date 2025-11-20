@@ -1,13 +1,20 @@
-# Build stage based on the .NET SDK image
-FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim AS build
+# Build stage (multi-platform aware) using the .NET 10 SDK with AOT tooling
+# Using --platform=$BUILDPLATFORM follows the official multi-arch guidance.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 
+ARG BUILDPLATFORM
+ARG TARGETOS
 ARG TARGETARCH
+ENV DOTNET_SKIP_WORKLOAD_MANIFEST_UPDATE=1
 
 # Install native toolchain and workloads needed for AOT and Blazor
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang zlib1g-dev python3 python-is-python3 \
-    && dotnet workload install wasm-tools --skip-manifest-update \
-    && rm -rf /var/lib/apt/lists/*
+    # Cross-linker/toolchain for arm64 Native AOT when building on non-arm hosts
+    && if [ "$TARGETARCH" = "arm64" ]; then \
+        apt-get install -y --no-install-recommends g++-aarch64-linux-gnu binutils-aarch64-linux-gnu; \
+       fi \
+    && dotnet workload install wasm-tools --skip-manifest-update
 
 WORKDIR /src
 
@@ -24,16 +31,20 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
         -p:PublishProfile=LinuxAot \
         -o /app/publish; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
+      export CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ OBJCOPY=aarch64-linux-gnu-objcopy STRIP=aarch64-linux-gnu-strip AR=aarch64-linux-gnu-ar RANLIB=aarch64-linux-gnu-ranlib; \
       dotnet publish DiaryApp.Server/DiaryApp.Server.csproj \
         -c Release \
         -p:PublishProfile=LinuxAotArm64 \
+        -p:StripSymbols=false \
+        -p:ObjCopyPath=/usr/bin/aarch64-linux-gnu-objcopy \
         -o /app/publish; \
     else \
       echo "Unsupported TARGETARCH: $TARGETARCH" && exit 1; \
     fi
 
-# Minimal runtime stage that executes the native binary (slim)
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-bookworm-slim AS runtime
+# Minimal runtime stage for the native binary
+FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+ARG TARGETPLATFORM
 
 # Run as root to ensure write access to mounted volumes such as /data/entries
 USER 0
@@ -46,8 +57,7 @@ RUN apt-get update \
         ca-certificates \
         libcurl4 \
         libssl3 \
-        ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+        ffmpeg
 
 ENV ASPNETCORE_URLS=http://+:8080
 ENV Transcription__Settings__FFmpegPath=/usr/bin

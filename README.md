@@ -351,7 +351,3 @@ services:
     image: your-registry/rec-one-diaryapp:latest
     # other settings (ports, volumes, environment) unchanged
 ```
-
-## Next steps
-
-Upgrade to .NET 10

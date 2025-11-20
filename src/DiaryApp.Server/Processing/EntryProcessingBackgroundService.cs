@@ -131,10 +131,11 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             var finalTitle = entry.Title;
             string? generatedTitle = null;
             var userProvidedTitle = request.UserProvidedTitle || !string.Equals(entry.Title, "Untitled", StringComparison.Ordinal);
+            var titleSource = finalDescription ?? transcript;
 
-            if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(finalDescription))
+            if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(titleSource))
             {
-                generatedTitle = await _titles.GenerateTitleAsync(entry, finalDescription, cancellationToken).ConfigureAwait(false);
+                generatedTitle = await _titles.GenerateTitleAsync(entry, titleSource, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(generatedTitle))
                 {
                     finalTitle = generatedTitle;
@@ -209,4 +210,3 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
         }
     }
 }
-
