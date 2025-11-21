@@ -33,7 +33,7 @@ rec-one/
 ## Getting started
 
 ### Prerequisites
-- .NET 8 SDK for local development (AOT publishing requires the full SDK toolchain)
+- .NET 10 SDK for local development (AOT publishing requires the full SDK toolchain)
 - Node is *not* required; assets are handled by the Blazor build pipeline
 
 ### Restore & build
