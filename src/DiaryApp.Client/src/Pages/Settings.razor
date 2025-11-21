@@ -1,10 +1,12 @@
 @page "/settings"
 @implements IAsyncDisposable
 @inject IMediaSettingsClient MediaSettingsClient
+@inject IServerSettingsClient ServerSettingsClient
 @inject IJSRuntime JsRuntime
 @using System
 @using System.Collections.Generic
 @using System.Linq
+@using DiaryApp.Shared.Abstractions
 @using Microsoft.JSInterop
 
 <h1>Recording Settings</h1>
@@ -65,6 +67,27 @@ else
                     @onclick="() => RefreshDevices(true)">Refresh devices</button>
         </div>
     </EditForm>
+
+    if (HasHttpsCertificate)
+    {
+        <div class="settings-section">
+            <div class="settings-actions">
+                <div>
+                    <label>HTTPS certificate</label>
+                    <small>Download the public PEM served by this host so other devices can trust it.</small>
+                </div>
+                <a class="icon-button"
+                   href="api/settings/https/certificate.pem"
+                   download="@CertificateFileName"
+                   title="Download HTTPS certificate (.pem)"
+                   aria-label="Download HTTPS certificate">
+                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                        <path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L11 12.17V2h2z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    }
 
     if (!_deviceAccessGranted)
     {
@@ -241,18 +264,38 @@ else
     private bool _isRefreshingDevices;
     private bool _deviceAccessGranted = true;
     private bool _requestPermissionsOnFirstRender;
+    private bool _preferencesLoaded;
     private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
     private List<MediaDeviceInfo> _microphones = new();
+    private HttpsCertificateInfo _httpsCertificateInfo = new(false, null);
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadPreferencesAsync();
+        try
+        {
+            await LoadPreferencesAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to load preferences: {ex.Message}";
+        }
+
+        try
+        {
+            await LoadHttpsCertificateInfoAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage ??= $"Failed to load HTTPS certificate info: {ex.Message}";
+        }
+
+        _isLoading = false;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && _preferencesLoaded)
         {
             await RefreshDevices(_requestPermissionsOnFirstRender);
             if (!_deviceAccessGranted)
@@ -270,8 +313,20 @@ else
         _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
         _formModel.TranscriptLanguage = NormalizeLanguageForInput(preferences.TranscriptLanguage);
         _formModel.FavoriteTags = string.Join(", ", preferences.FavoriteTags ?? Array.Empty<string>());
-        _isLoading = false;
+        _preferencesLoaded = true;
     }
+
+    private async Task LoadHttpsCertificateInfoAsync()
+    {
+        _httpsCertificateInfo = await ServerSettingsClient.GetHttpsCertificateInfoAsync();
+    }
+
+    private bool HasHttpsCertificate => _httpsCertificateInfo.IsConfigured;
+
+    private string CertificateFileName
+        => string.IsNullOrWhiteSpace(_httpsCertificateInfo.SuggestedFileName)
+            ? "https-certificate.pem"
+            : _httpsCertificateInfo.SuggestedFileName;
 
     private async Task RefreshDevices(bool requestPermissions = false)
     {

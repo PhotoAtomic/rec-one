@@ -51,3 +51,8 @@ public interface IMediaSettingsClient
     Task<UserMediaPreferences> GetMediaPreferencesAsync(CancellationToken cancellationToken = default);
     Task SaveMediaPreferencesAsync(UserMediaPreferences preferences, CancellationToken cancellationToken = default);
 }
+
+public interface IServerSettingsClient
+{
+    Task<HttpsCertificateInfo> GetHttpsCertificateInfoAsync(CancellationToken cancellationToken = default);
+}

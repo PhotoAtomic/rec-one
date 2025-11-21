@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,7 @@ builder.Services.AddSingleton<IEntryProcessingQueue, EntryProcessingQueue>();
 builder.Services.AddSingleton<ChunkedUploadStore>();
 builder.Services.AddHostedService<EntryProcessingBackgroundService>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<HttpsCertificateService>();
 
 var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
 var authenticationConfigured = oidcSection.Exists() && !string.IsNullOrWhiteSpace(oidcSection["Authority"]);
@@ -461,6 +463,27 @@ settings.MapPut("/media", async (UserMediaPreferences preferences, IVideoEntrySt
 {
     await store.UpdatePreferencesAsync(preferences, cancellationToken);
     return Results.NoContent();
+});
+
+settings.MapGet("/https", (HttpsCertificateService httpsCertificates)
+    => Results.Ok(httpsCertificates.GetInfo()));
+
+settings.MapGet("/https/certificate.pem", (HttpsCertificateService httpsCertificates) =>
+{
+    var export = httpsCertificates.TryExportPublicCertificate();
+    if (export.NotConfigured || export.MissingFile)
+    {
+        return Results.NotFound(export.Error);
+    }
+
+    if (!export.Success || string.IsNullOrWhiteSpace(export.PemContents))
+    {
+        return Results.Problem(export.Error ?? "Unable to load HTTPS certificate.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    var fileName = string.IsNullOrWhiteSpace(export.FileName) ? "https-certificate.pem" : export.FileName;
+    var pem = export.PemContents ?? string.Empty;
+    return Results.File(Encoding.UTF8.GetBytes(pem), "application/x-pem-file", fileName);
 });
 
 app.MapFallbackToFile("index.html");
