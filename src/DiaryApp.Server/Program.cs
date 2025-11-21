@@ -161,7 +161,7 @@ uploads.MapPost("/{id:guid}/chunk", async (
     HttpRequest httpRequest,
     ChunkedUploadStore uploadStore,
     CancellationToken cancellationToken) =>
-{
+{    
     var offset = ParseHeaderLong(httpRequest.Headers, "X-Upload-Offset", -1);
     var totalBytes = ParseHeaderLong(httpRequest.Headers, "X-Upload-Total", 0);
     var uploaded = await uploadStore.AppendChunkAsync(id, httpRequest.Body, offset, totalBytes, cancellationToken);

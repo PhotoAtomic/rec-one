@@ -1,0 +1,189 @@
+@page "/outgoing"
+@using DiaryApp.Client.Services
+@inject IOutgoingUploadQueue OutgoingQueue
+@inject VideoUploadService UploadService
+
+<h1>Outgoing uploads</h1>
+
+@if (_entries is null)
+{
+    <p>Loading queued recordings...</p>
+}
+else if (_entries.Count == 0)
+{
+    <p>No queued recordings. If an upload fails, the recording will stay here so you can retry.</p>
+}
+else
+{
+    <ul class="entry-list">
+        @foreach (var entry in _entries)
+        {
+            <li class="entry-card">
+                <div class="entry-card__header">
+                    <div>
+                        <h3>@entry.Title</h3>
+                        <p class="entry-card__timestamp">
+                            Saved locally @entry.CreatedAt.ToLocalTime().ToString("f")
+                            &bull; @FormatSize(entry.SizeBytes)
+                        </p>
+                        @if (_messages.TryGetValue(entry.Id, out var message))
+                        {
+                            <p class="entry-card__status">@message</p>
+                        }
+                    </div>
+                    <div class="entry-card__header-actions">
+                        <div class="entry-card__header-buttons">
+                            <button class="with-spinner"
+                                    @onclick="() => RetryUpload(entry.Id)"
+                                    disabled="@(_uploading.Contains(entry.Id))">
+                                @if (_uploading.Contains(entry.Id))
+                                {
+                                    <span class="button-spinner" aria-hidden="true"></span>
+                                    <span>Uploading...</span>
+                                }
+                                else
+                                {
+                                    <span>Retry upload</span>
+                                }
+                            </button>
+                            <button type="button"
+                                    class="icon-button danger"
+                                    title="Delete queued upload"
+                                    aria-label="Delete queued upload"
+                                    disabled="@(_uploading.Contains(entry.Id) || _deleting.Contains(entry.Id))"
+                                    @onclick="() => Delete(entry.Id)">
+                                @if (_deleting.Contains(entry.Id))
+                                {
+                                    <span class="button-spinner" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1z" />
+                                    </svg>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(entry.Description))
+                {
+                    <p>@entry.Description</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(entry.Tags))
+                {
+                    <div class="tag-list">
+                        @foreach (var tag in entry.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            <span class="tag-pill">@tag</span>
+                        }
+                    </div>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyCollection<OutgoingEntryMetadata>? _entries;
+    private readonly HashSet<Guid> _uploading = new();
+    private readonly HashSet<Guid> _deleting = new();
+    private readonly Dictionary<Guid, string> _messages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        var entries = await OutgoingQueue.ListAsync();
+        _entries = entries
+            .OrderByDescending(e => e.CreatedAt)
+            .ToArray();
+    }
+
+    private async Task RetryUpload(Guid id)
+    {
+        if (!_uploading.Add(id))
+        {
+            return;
+        }
+
+        _messages[id] = "Preparing upload...";
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var entry = await OutgoingQueue.GetAsync(id);
+            if (entry is null || entry.Data.Length == 0)
+            {
+                _messages[id] = "Recording not found in the browser cache.";
+                return;
+            }
+
+            var progress = new Progress<UploadProgress>(p =>
+            {
+                _messages[id] = $"Uploading {FormatSize(p.UploadedBytes)} of {FormatSize(p.TotalBytes)}...";
+                InvokeAsync(StateHasChanged);
+            });
+
+            await UploadService.UploadAsync(
+                entry.Data,
+                entry.Metadata.FileName,
+                entry.Metadata.Title,
+                entry.Metadata.Description,
+                entry.Metadata.Tags,
+                progress);
+
+            await OutgoingQueue.RemoveAsync(id);
+            _messages[id] = "Upload succeeded and was removed from the queue.";
+            await LoadEntries();
+        }
+        catch (Exception ex)
+        {
+            _messages[id] = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            _uploading.Remove(id);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        if (!_deleting.Add(id))
+        {
+            return;
+        }
+
+        try
+        {
+            await OutgoingQueue.RemoveAsync(id);
+            _messages.Remove(id);
+            await LoadEntries();
+        }
+        finally
+        {
+            _deleting.Remove(id);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        const double OneMb = 1024 * 1024d;
+        if (bytes <= 0)
+        {
+            return "0 MB";
+        }
+
+        if (bytes < OneMb)
+        {
+            return $"{bytes / 1024d:0.0} KB";
+        }
+
+        return $"{bytes / OneMb:0.##} MB";
+    }
+}

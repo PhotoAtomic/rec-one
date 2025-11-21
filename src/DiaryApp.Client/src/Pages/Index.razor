@@ -1,8 +1,10 @@
 @page "/"
 @using Microsoft.JSInterop
-@using System.Buffers
+@using System.IO
+@using DiaryApp.Client.Services
 @inject IVideoCaptureService VideoCapture
-@inject IVideoEntryClient EntryClient
+@inject VideoUploadService UploadService
+@inject IOutgoingUploadQueue OutgoingQueue
 @inject IJSRuntime JsRuntime
 @implements IAsyncDisposable
 
@@ -77,8 +79,6 @@
 }
 
 @code {
-    private const int ChunkSizeBytes = 5 * 1024 * 1024;
-
     private ElementReference _videoRef;
     private ElementReference _vuMeterRef;
     private bool _isRecording;
@@ -122,68 +122,79 @@
         }
 
         _isSaving = true;
-        _statusMessage = "Starting upload...";
-        Guid? uploadId = null;
-        byte[]? buffer = null;
+        _statusMessage = "Preparing upload...";
+        byte[]? recordingBytes = null;
+        var safeTitle = string.IsNullOrWhiteSpace(_title) ? "untitled" : _title.Trim();
         try
         {
-            using var recordedStream = await VideoCapture.GetRecordedStreamAsync();
-            if (recordedStream is null)
+            recordingBytes = await ReadRecordingBytesAsync();
+            if (recordingBytes is null || recordingBytes.Length == 0)
             {
-                _statusMessage = "No recording available.";
+                _statusMessage = "Recording is empty or unavailable.";
                 return;
             }
 
-            recordedStream.Position = 0;
-
-            if (!recordedStream.CanSeek || recordedStream.Length <= 0)
-            {
-                _statusMessage = "Recording is empty or not seekable.";
-                return;
-            }
-
-            var totalBytes = recordedStream.Length;
-            var safeTitle = string.IsNullOrWhiteSpace(_title) ? "untitled" : _title;
             var fileName = $"{safeTitle}.webm";
-
-            var startResponse = await EntryClient.StartUploadAsync(
-                new ChunkedUploadStartRequest(fileName, totalBytes));
-            uploadId = startResponse.UploadId;
-
-            buffer = ArrayPool<byte>.Shared.Rent(ChunkSizeBytes);
-            var offset = 0L;
-            int bytesRead;
-            while ((bytesRead = await recordedStream.ReadAsync(buffer, 0, ChunkSizeBytes)) > 0)
+            var progress = new Progress<UploadProgress>(p =>
             {
-                using var chunkStream = new MemoryStream(buffer, 0, bytesRead, writable: false);
-                await EntryClient.UploadChunkAsync(uploadId.Value, chunkStream, offset, totalBytes);
-                offset += bytesRead;
-                _statusMessage = $"Uploaded {offset / 1024 / 1024} MB of {Math.Max(totalBytes, offset) / 1024 / 1024} MB...";
-                StateHasChanged();
-            }
+                var uploadedMb = p.UploadedBytes / 1024 / 1024;
+                var totalMb = Math.Max(p.TotalBytes, p.UploadedBytes) / 1024 / 1024;
+                _statusMessage = $"Uploaded {uploadedMb} MB of {totalMb} MB...";
+                InvokeAsync(StateHasChanged);
+            });
 
-            var completeRequest = new ChunkedUploadCompleteRequest(_title, _description, _tagInput);
-            _lastCreated = await EntryClient.CompleteUploadAsync(uploadId.Value, completeRequest);
+            _lastCreated = await UploadService.UploadAsync(
+                recordingBytes,
+                fileName,
+                _title,
+                _description,
+                _tagInput,
+                progress);
             _pendingScrollToLastEntry = true;
             _statusMessage = "Entry saved.";
             _hasRecording = false;
         }
         catch (Exception ex)
         {
-            if (uploadId.HasValue)
-            {
-                await EntryClient.CancelUploadAsync(uploadId.Value);
-            }
             _statusMessage = $"Failed to save entry: {ex.Message}";
+            if (recordingBytes is not null && recordingBytes.Length > 0)
+            {
+                var queuedEntry = new OutgoingEntry(
+                    new OutgoingEntryMetadata(
+                        Guid.NewGuid(),
+                        safeTitle,
+                        _description,
+                        _tagInput,
+                        $"{safeTitle}.webm",
+                        DateTimeOffset.UtcNow,
+                        recordingBytes.LongLength),
+                    recordingBytes);
+                await OutgoingQueue.EnqueueAsync(queuedEntry);
+                _statusMessage += " The recording was saved to the Outgoing queue.";
+            }
         }
         finally
         {
-            if (buffer is not null)
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
             _isSaving = false;
         }
+    }
+
+    private async Task<byte[]?> ReadRecordingBytesAsync()
+    {
+        using var recordedStream = await VideoCapture.GetRecordedStreamAsync();
+        if (recordedStream is null)
+        {
+            return null;
+        }
+
+        if (!recordedStream.CanRead)
+        {
+            return null;
+        }
+
+        using var memory = new MemoryStream();
+        await recordedStream.CopyToAsync(memory);
+        return memory.Length == 0 ? null : memory.ToArray();
     }
 
     private async Task ScrollToFormAsync()
