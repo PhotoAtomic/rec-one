@@ -186,7 +186,7 @@ When enabled, every entry description is embedded during indexing and cached in-
 Build the Native AOT-powered image:
 
 ```bash
-docker build -t video-diary .
+docker build -t rec-one .
 ```
 
 Run it with persistent volumes for recordings and encryption keys:
@@ -196,7 +196,7 @@ docker run ^
   -p 8080:8080 ^
   -v "%cd%/data:/data/entries" ^
   -v "%cd%/keys:/root/.local/share/DiaryApp/keys" ^
-  video-diary
+  rec-one
 ```
 
 Linux/macOS variant:
@@ -206,7 +206,7 @@ docker run \
   -p 8080:8080 \
   -v "$(pwd)/data:/data/entries" \
   -v "$(pwd)/keys:/root/.local/share/DiaryApp/keys" \
-  video-diary
+  rec-one
 ```
 
 A companion `docker-compose.yml` is provided. Customize the host paths or environment overrides as needed, then run:
@@ -217,12 +217,12 @@ docker compose up --build
 
 To override configuration inside the container, either mount a custom `appsettings.Production.json` or rely on environment variables (`Storage__RootDirectory`, `Authentication__OIDC__Authority`, etc.).
 
-An official pre-built image is also published to Docker Hub as `photoatomic/rec-one-diaryapp`. You can use it directly instead of building locally:
+An official pre-built image is also published to Docker Hub as `photoatomic/rec-one`. You can use it directly instead of building locally:
 
 ```yaml
 services:
   diaryapp:
-    image: photoatomic/rec-one-diaryapp:latest
+    image: photoatomic/rec-one:latest
     # other settings (ports, volumes, environment) unchanged
 ```
 
