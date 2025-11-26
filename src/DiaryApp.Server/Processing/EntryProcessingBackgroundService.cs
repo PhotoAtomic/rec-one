@@ -58,36 +58,64 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
         _summaryEnabled = summaryOptionsValue.Enabled && !string.IsNullOrWhiteSpace(summaryOptionsValue.Provider);
         _titleGenerationEnabled = titleOptionsValue.Enabled && !string.IsNullOrWhiteSpace(titleOptionsValue.Provider);
         _tagSuggestionsEnabled = tagOptionsValue.Enabled && !string.IsNullOrWhiteSpace(tagOptionsValue.Provider);
+
+        _logger.LogInformation(
+            "EntryProcessingBackgroundService initialized. Transcription: {Transcription}, Summary: {Summary}, Title: {Title}, Tags: {Tags}",
+            _transcriptionEnabled,
+            _summaryEnabled,
+            _titleGenerationEnabled,
+            _tagSuggestionsEnabled);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await EnqueuePendingEntriesAsync(stoppingToken).ConfigureAwait(false);
+        _logger.LogInformation("EntryProcessingBackgroundService starting...");
 
-        await foreach (var workItem in _queue.DequeueAsync(stoppingToken).ConfigureAwait(false))
+        try
         {
-            if (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
+            await EnqueuePendingEntriesAsync(stoppingToken).ConfigureAwait(false);
 
-            await ProcessEntryAsync(workItem, stoppingToken).ConfigureAwait(false);
+            _logger.LogInformation("EntryProcessingBackgroundService now waiting for queued items...");
+
+            await foreach (var workItem in _queue.DequeueAsync(stoppingToken).ConfigureAwait(false))
+            {
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation("EntryProcessingBackgroundService stopping due to cancellation.");
+                    break;
+                }
+
+                _logger.LogInformation("Processing entry {EntryId} from queue.", workItem.EntryId);
+                await ProcessEntryAsync(workItem, stoppingToken).ConfigureAwait(false);
+            }
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "EntryProcessingBackgroundService encountered a fatal error.");
+            throw;
+        }
+
+        _logger.LogInformation("EntryProcessingBackgroundService has stopped.");
     }
 
     private async Task EnqueuePendingEntriesAsync(CancellationToken cancellationToken)
     {
         try
         {
+            _logger.LogInformation("Checking for pending entries to enqueue...");
             var entries = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+            var enqueued = 0;
             foreach (var entry in entries)
             {
                 if (entry.ProcessingStatus == VideoEntryProcessingStatus.InProgress)
                 {
                     var userProvidedTitle = !string.Equals(entry.Title, "Untitled", StringComparison.Ordinal);
                     _queue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+                    enqueued++;
+                    _logger.LogInformation("Enqueued pending entry {EntryId} for processing.", entry.Id);
                 }
             }
+            _logger.LogInformation("Enqueued {Count} pending entries for processing.", enqueued);
         }
         catch (Exception ex)
         {
@@ -98,33 +126,78 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
     private async Task ProcessEntryAsync(EntryProcessingRequest request, CancellationToken cancellationToken)
     {
         VideoEntryDto? entry = null;
+        const int maxRetries = 5;
+        const int initialDelayMs = 500;
+        const int maxDelayMs = 5000;
+
         try
         {
-            entry = await _store.GetAsync(request.EntryId, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Starting processing for entry {EntryId}.", request.EntryId);
+
+            // Retry logic with exponential backoff for slow Azure Files consistency
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                entry = await _store.GetAsync(request.EntryId, cancellationToken).ConfigureAwait(false);
+
+                if (entry is not null)
+                {
+                    _logger.LogInformation("Entry {EntryId} found on attempt {Attempt}.", request.EntryId, attempt);
+                    break;
+                }
+
+                if (attempt < maxRetries)
+                {
+                    // Exponential backoff: 500ms, 1000ms, 2000ms, 4000ms, capped at 5000ms
+                    var delayMs = Math.Min(initialDelayMs * (1 << (attempt - 1)), maxDelayMs);
+                    _logger.LogWarning(
+                        "Entry {EntryId} not found on attempt {Attempt}/{MaxRetries}. Waiting {DelayMs}ms before retry (Azure Files may need time to flush)...",
+                        request.EntryId,
+                        attempt,
+                        maxRetries,
+                        delayMs);
+                    await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             if (entry is null)
             {
+                _logger.LogError("Entry {EntryId} not found after {MaxRetries} attempts. This indicates the entry was saved to a different user segment or path.", request.EntryId, maxRetries);
                 return;
             }
+
+            _logger.LogInformation("Entry {EntryId} has VideoPath: {VideoPath}", entry.Id, entry.VideoPath);
 
             await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken).ConfigureAwait(false);
 
             string? transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(transcript) && _transcriptionEnabled)
             {
+                _logger.LogInformation("Generating transcript for entry {EntryId}...", entry.Id);
                 transcript = await _transcripts.GenerateAsync(entry, cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(transcript))
                 {
+                    _logger.LogWarning("Transcript generation returned empty result for entry {EntryId}.", entry.Id);
                     transcript = null;
+                }
+                else
+                {
+                    _logger.LogInformation("Transcript generated successfully for entry {EntryId}.", entry.Id);
                 }
             }
 
             var finalDescription = entry.Description;
             if (_summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
             {
+                _logger.LogInformation("Generating summary for entry {EntryId}...", entry.Id);
                 var generatedDescription = await _summaries.SummarizeAsync(entry, transcript, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(generatedDescription))
                 {
                     finalDescription = generatedDescription;
+                    _logger.LogInformation("Summary generated successfully for entry {EntryId}.", entry.Id);
+                }
+                else
+                {
+                    _logger.LogWarning("Summary generation returned empty result for entry {EntryId}.", entry.Id);
                 }
             }
 
@@ -135,13 +208,16 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
             if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(titleSource))
             {
+                _logger.LogInformation("Generating title for entry {EntryId}...", entry.Id);
                 generatedTitle = await _titles.GenerateTitleAsync(entry, titleSource, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(generatedTitle))
                 {
                     finalTitle = generatedTitle;
+                    _logger.LogInformation("Title generated successfully for entry {EntryId}: {Title}", entry.Id, finalTitle);
                 }
                 else
                 {
+                    _logger.LogWarning("Title generation returned empty result for entry {EntryId}.", entry.Id);
                     generatedTitle = null;
                 }
             }
@@ -149,6 +225,7 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             var tags = entry.Tags.ToList();
             if (_tagSuggestionsEnabled && !string.IsNullOrWhiteSpace(finalDescription))
             {
+                _logger.LogInformation("Generating tag suggestions for entry {EntryId}...", entry.Id);
                 var suggestedTags = await EntryEndpointHelpers.SuggestTagsAsync(
                     finalDescription,
                     tags,
@@ -161,6 +238,11 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
                         .Concat(suggestedTags)
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
+                    _logger.LogInformation("Tag suggestions generated for entry {EntryId}: {Tags}", entry.Id, string.Join(", ", suggestedTags));
+                }
+                else
+                {
+                    _logger.LogInformation("No tag suggestions generated for entry {EntryId}.", entry.Id);
                 }
             }
 
@@ -172,6 +254,7 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
             if (transcript is not null || generatedTitle is not null || descriptionChanged || tagsChanged)
             {
+                _logger.LogInformation("Updating entry {EntryId} with processed results.", entry.Id);
                 var updatedRequest = EntryEndpointHelpers.Normalize(new VideoEntryUpdateRequest(
                     finalTitle,
                     finalDescription,
@@ -188,10 +271,11 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             await _searchIndex.IndexAsync(indexEntry, cancellationToken).ConfigureAwait(false);
 
             await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.Completed, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Successfully completed processing for entry {EntryId}.", entry.Id);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Swallow cancellations on shutdown
+            _logger.LogInformation("Processing cancelled for entry {EntryId}.", request.EntryId);
         }
         catch (Exception ex)
         {

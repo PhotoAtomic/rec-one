@@ -43,6 +43,10 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<VideoEntryDto> SaveAsync(Stream videoStream, string originalFileName, VideoEntryUpdateRequest metadata, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        _logger.LogInformation("SaveAsync called using user segment '{UserSegment}' (HttpContext available: {HasContext})", 
+            userSegment, 
+            _httpContextAccessor.HttpContext != null);
+        
         await EnsureInitializedAsync(userSegment, cancellationToken).ConfigureAwait(false);
 
         var id = Guid.NewGuid();
@@ -57,6 +61,9 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var recordingRoot = GetRecordingRootDirectory(userSegment);
         Directory.CreateDirectory(recordingRoot);
         var filePath = Path.Combine(recordingRoot, fileName + extension);
+        
+        _logger.LogInformation("Saving entry {EntryId} to path: {FilePath}", id, filePath);
+        
         await using (var fileStream = File.Create(filePath))
         {
             await videoStream.CopyToAsync(fileStream, cancellationToken);
@@ -90,6 +97,8 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         {
             var cache = GetOrCreateCache(userSegment);
             cache[record.Id] = record;
+            _logger.LogInformation("Entry {EntryId} added to cache for user segment '{UserSegment}'. Cache now contains {Count} entries.", 
+                id, userSegment, cache.Count);
             await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -124,6 +133,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        _logger.LogInformation("GetAsync called for entry {EntryId} using user segment '{UserSegment}' (HttpContext available: {HasContext})", 
+            id, 
+            userSegment, 
+            _httpContextAccessor.HttpContext != null);
+        
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
         StoredVideoEntry? stored;
@@ -132,6 +146,24 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         {
             var cache = GetOrCreateCache(userSegment);
             cache.TryGetValue(id, out stored);
+            
+            if (stored == null)
+            {
+                _logger.LogWarning("Entry {EntryId} not found in cache for user segment '{UserSegment}'. Cache contains {Count} entries.", 
+                    id, userSegment, cache.Count);
+                
+                // Log all available entry IDs for debugging
+                if (cache.Count > 0)
+                {
+                    _logger.LogInformation("Available entry IDs in segment '{UserSegment}': {EntryIds}", 
+                        userSegment, 
+                        string.Join(", ", cache.Keys));
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Entry {EntryId} found in cache for user segment '{UserSegment}'.", id, userSegment);
+            }
         }
         finally
         {

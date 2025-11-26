@@ -224,6 +224,12 @@ uploads.MapPost("/{id:guid}/complete", async (
         if (anyProcessing)
         {
             await store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
+            
+            // Give Azure Files time to flush writes before enqueueing for background processing
+            // This prevents the race condition where the background worker tries to read the entry
+            // before the file system has made it visible
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+            
             processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
             entry = (await store.GetAsync(entry.Id, cancellationToken))!;
         }
@@ -305,6 +311,12 @@ entries.MapPost("/", async (
     if (anyProcessing)
     {
         await store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
+        
+        // Give Azure Files time to flush writes before enqueueing for background processing
+        // This prevents the race condition where the background worker tries to read the entry
+        // before the file system has made it visible
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        
         processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
         entry = (await store.GetAsync(entry.Id, cancellationToken))!;
     }
