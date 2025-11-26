@@ -99,7 +99,8 @@ public sealed class EntriesController : ControllerBase
         if (anyProcessing)
         {
             await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken);
-            _processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+            var userSegment = _store.GetCurrentUserSegment();
+            _processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle, userSegment));
             entry = (await _store.GetAsync(entry.Id, cancellationToken))!;
         }
 

@@ -6,7 +6,7 @@ using DiaryApp.Shared.Abstractions;
 
 namespace DiaryApp.Server.Processing;
 
-public sealed record EntryProcessingRequest(Guid EntryId, bool UserProvidedTitle);
+public sealed record EntryProcessingRequest(Guid EntryId, bool UserProvidedTitle, string UserSegment);
 
 public interface IEntryProcessingQueue
 {

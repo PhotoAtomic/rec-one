@@ -105,14 +105,15 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             _logger.LogInformation("Checking for pending entries to enqueue...");
             var entries = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
             var enqueued = 0;
+            var userSegment = _store.GetCurrentUserSegment();
             foreach (var entry in entries)
             {
                 if (entry.ProcessingStatus == VideoEntryProcessingStatus.InProgress)
                 {
                     var userProvidedTitle = !string.Equals(entry.Title, "Untitled", StringComparison.Ordinal);
-                    _queue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+                    _queue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle, userSegment));
                     enqueued++;
-                    _logger.LogInformation("Enqueued pending entry {EntryId} for processing.", entry.Id);
+                    _logger.LogInformation("Enqueued pending entry {EntryId} for processing with user segment '{UserSegment}'.", entry.Id, userSegment);
                 }
             }
             _logger.LogInformation("Enqueued {Count} pending entries for processing.", enqueued);
@@ -132,12 +133,12 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
         try
         {
-            _logger.LogInformation("Starting processing for entry {EntryId}.", request.EntryId);
+            _logger.LogInformation("Starting processing for entry {EntryId} with user segment '{UserSegment}'.", request.EntryId, request.UserSegment);
 
             // Retry logic with exponential backoff for slow Azure Files consistency
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                entry = await _store.GetAsync(request.EntryId, cancellationToken).ConfigureAwait(false);
+                entry = await _store.GetAsync(request.EntryId, request.UserSegment, cancellationToken).ConfigureAwait(false);
 
                 if (entry is not null)
                 {
@@ -161,13 +162,13 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
             if (entry is null)
             {
-                _logger.LogError("Entry {EntryId} not found after {MaxRetries} attempts. This indicates the entry was saved to a different user segment or path.", request.EntryId, maxRetries);
+                _logger.LogError("Entry {EntryId} not found after {MaxRetries} attempts in user segment '{UserSegment}'.", request.EntryId, maxRetries, request.UserSegment);
                 return;
             }
 
             _logger.LogInformation("Entry {EntryId} has VideoPath: {VideoPath}", entry.Id, entry.VideoPath);
 
-            await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.InProgress, cancellationToken).ConfigureAwait(false);
+            await _store.UpdateProcessingStatusAsync(entry.Id, request.UserSegment, VideoEntryProcessingStatus.InProgress, cancellationToken).ConfigureAwait(false);
 
             string? transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(transcript) && _transcriptionEnabled)
@@ -261,8 +262,8 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
                     null,
                     transcript,
                     tags));
-                await _store.UpdateAsync(entry.Id, updatedRequest, cancellationToken).ConfigureAwait(false);
-                entry = (await _store.GetAsync(entry.Id, cancellationToken).ConfigureAwait(false))!;
+                await _store.UpdateAsync(entry.Id, request.UserSegment, updatedRequest, cancellationToken).ConfigureAwait(false);
+                entry = (await _store.GetAsync(entry.Id, request.UserSegment, cancellationToken).ConfigureAwait(false))!;
             }
 
             var indexEntry = string.IsNullOrWhiteSpace(transcript)
@@ -270,7 +271,7 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
                 : entry with { Transcript = transcript };
             await _searchIndex.IndexAsync(indexEntry, cancellationToken).ConfigureAwait(false);
 
-            await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.Completed, cancellationToken).ConfigureAwait(false);
+            await _store.UpdateProcessingStatusAsync(entry.Id, request.UserSegment, VideoEntryProcessingStatus.Completed, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Successfully completed processing for entry {EntryId}.", entry.Id);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -284,7 +285,7 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             {
                 try
                 {
-                    await _store.UpdateProcessingStatusAsync(entry.Id, VideoEntryProcessingStatus.Failed, cancellationToken).ConfigureAwait(false);
+                    await _store.UpdateProcessingStatusAsync(entry.Id, request.UserSegment, VideoEntryProcessingStatus.Failed, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception updateEx)
                 {

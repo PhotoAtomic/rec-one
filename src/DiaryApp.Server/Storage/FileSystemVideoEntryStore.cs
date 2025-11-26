@@ -133,6 +133,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        return await GetAsync(id, userSegment, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VideoEntryDto?> GetAsync(Guid id, string userSegment, CancellationToken cancellationToken)
+    {
         _logger.LogInformation("GetAsync called for entry {EntryId} using user segment '{UserSegment}' (HttpContext available: {HasContext})", 
             id, 
             userSegment, 
@@ -176,6 +181,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        await UpdateAsync(id, userSegment, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAsync(Guid id, string userSegment, VideoEntryUpdateRequest request, CancellationToken cancellationToken)
+    {
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -326,6 +336,11 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task UpdateProcessingStatusAsync(Guid id, VideoEntryProcessingStatus status, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        await UpdateProcessingStatusAsync(id, userSegment, status, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateProcessingStatusAsync(Guid id, string userSegment, VideoEntryProcessingStatus status, CancellationToken cancellationToken)
+    {
         await EnsureInitializedAsync(userSegment, cancellationToken).ConfigureAwait(false);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -659,6 +674,8 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         return DefaultUserSegment;
     }
+
+    string IVideoEntryStore.GetCurrentUserSegment() => GetCurrentUserSegment();
 
     private string EnsureFinalVideoPath(StoredVideoEntry entry, string title)
     {

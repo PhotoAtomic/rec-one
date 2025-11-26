@@ -230,7 +230,8 @@ uploads.MapPost("/{id:guid}/complete", async (
             // before the file system has made it visible
             await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
             
-            processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+            var userSegment = store.GetCurrentUserSegment();
+            processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle, userSegment));
             entry = (await store.GetAsync(entry.Id, cancellationToken))!;
         }
 
@@ -317,7 +318,8 @@ entries.MapPost("/", async (
         // before the file system has made it visible
         await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
         
-        processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle));
+        var userSegment = store.GetCurrentUserSegment();
+        processingQueue.Enqueue(new EntryProcessingRequest(entry.Id, userProvidedTitle, userSegment));
         entry = (await store.GetAsync(entry.Id, cancellationToken))!;
     }
 
