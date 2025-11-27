@@ -88,7 +88,9 @@ public record SemanticSearchOptions
 }
 
 public record UserMediaPreferences(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? CameraDeviceId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? MicrophoneDeviceId,
     string TranscriptLanguage = "en-US",
     IReadOnlyCollection<string>? FavoriteTags = null)

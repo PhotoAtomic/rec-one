@@ -5,7 +5,9 @@
 @inject IVideoCaptureService VideoCapture
 @inject VideoUploadService UploadService
 @inject IOutgoingUploadQueue OutgoingQueue
+@inject IDevicePreferencesService DevicePreferencesService
 @inject IJSRuntime JsRuntime
+@inject NavigationManager Navigation
 @implements IAsyncDisposable
 
 <h1>Capture a new entry</h1>
@@ -94,14 +96,65 @@
     private ElementReference _titleInput;
     private ElementReference _lastEntryRef;
     private IJSObjectReference? _uiModule;
+    private IJSObjectReference? _permissionsModule;
     private bool _pendingScrollToLastEntry;
 
     private async Task StartRecording()
     {
         _statusMessage = null;
+
+        // Check if user needs to configure devices or grant permissions
+        var needsSetup = await CheckIfNeedsDeviceSetupAsync();
+        if (needsSetup)
+        {
+            Navigation.NavigateTo("/settings");
+            return;
+        }
+
         _hasRecording = false;
         _isRecording = true;
-        await VideoCapture.StartRecordingAsync(_videoRef, _vuMeterRef, _captureScreen);
+        
+        try
+        {
+            await VideoCapture.StartRecordingAsync(_videoRef, _vuMeterRef, _captureScreen);
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to start recording. Please check your camera and microphone settings: {ex.Message}";
+            _isRecording = false;
+            
+            // Redirect to settings if there's a permission or device issue
+            if (ex.Message.Contains("Permission") || ex.Message.Contains("NotAllowed") || ex.Message.Contains("denied"))
+            {
+                await Task.Delay(2000); // Give user time to read the message
+                Navigation.NavigateTo("/settings");
+            }
+        }
+    }
+
+    private async Task<bool> CheckIfNeedsDeviceSetupAsync()
+    {
+        try
+        {
+            // Check device preferences
+            var devicePrefs = await DevicePreferencesService.GetDevicePreferencesAsync();
+            var hasDevicesConfigured = !string.IsNullOrWhiteSpace(devicePrefs.CameraDeviceId) || 
+                                      !string.IsNullOrWhiteSpace(devicePrefs.MicrophoneDeviceId);
+
+            // Check media permissions
+            _permissionsModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/mediaPermissions.js");
+            var permissionCheck = await _permissionsModule.InvokeAsync<PermissionCheckResult>("checkMediaPermissions");
+
+            // Redirect to settings if:
+            // 1. No devices configured AND no permission granted yet
+            // 2. OR explicitly needs permission (browser hasn't prompted yet)
+            return (!hasDevicesConfigured && !permissionCheck.HasAccess) || permissionCheck.NeedsPermission;
+        }
+        catch (Exception)
+        {
+            // If check fails, allow recording attempt (will fail naturally and show error)
+            return false;
+        }
     }
 
     private async Task StopRecording()
@@ -250,6 +303,10 @@
         {
             await _uiModule.DisposeAsync();
         }
+        if (_permissionsModule is not null)
+        {
+            await _permissionsModule.DisposeAsync();
+        }
     }
 
     private async Task ToggleCaptureMode()
@@ -277,5 +334,11 @@
                 ? "Screen capture enabled. Start recording to capture your display."
                 : "Webcam capture enabled.";
         }
+    }
+
+    private sealed class PermissionCheckResult
+    {
+        public bool HasAccess { get; set; }
+        public bool NeedsPermission { get; set; }
     }
 }

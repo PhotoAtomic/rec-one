@@ -1,6 +1,7 @@
 @page "/settings"
 @implements IAsyncDisposable
 @inject IMediaSettingsClient MediaSettingsClient
+@inject IDevicePreferencesService DevicePreferencesService
 @inject IServerSettingsClient ServerSettingsClient
 @inject IJSRuntime JsRuntime
 @using System
@@ -27,6 +28,7 @@ else
                     <option value="@camera.DeviceId">@camera.Label</option>
                 }
             </select>
+            <small>Stored on this device only (browser cookie).</small>
         </div>
 
         <div class="settings-section">
@@ -38,6 +40,7 @@ else
                     <option value="@microphone.DeviceId">@microphone.Label</option>
                 }
             </select>
+            <small>Stored on this device only (browser cookie).</small>
         </div>
 
         <div class="settings-section">
@@ -307,12 +310,17 @@ else
 
     private async Task LoadPreferencesAsync()
     {
-        var preferences = await MediaSettingsClient.GetMediaPreferencesAsync();
-        _requestPermissionsOnFirstRender = IsUnconfigured(preferences);
-        _formModel.CameraDeviceId = NormalizeForInput(preferences.CameraDeviceId);
-        _formModel.MicrophoneDeviceId = NormalizeForInput(preferences.MicrophoneDeviceId);
-        _formModel.TranscriptLanguage = NormalizeLanguageForInput(preferences.TranscriptLanguage);
-        _formModel.FavoriteTags = string.Join(", ", preferences.FavoriteTags ?? Array.Empty<string>());
+        // Load device preferences from cookie
+        var devicePrefs = await DevicePreferencesService.GetDevicePreferencesAsync();
+        _formModel.CameraDeviceId = NormalizeForInput(devicePrefs.CameraDeviceId);
+        _formModel.MicrophoneDeviceId = NormalizeForInput(devicePrefs.MicrophoneDeviceId);
+
+        // Load language and tags from server
+        var serverPrefs = await MediaSettingsClient.GetMediaPreferencesAsync();
+        _formModel.TranscriptLanguage = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
+        _formModel.FavoriteTags = string.Join(", ", serverPrefs.FavoriteTags ?? Array.Empty<string>());
+
+        _requestPermissionsOnFirstRender = IsUnconfigured(devicePrefs, serverPrefs);
         _preferencesLoaded = true;
     }
 
@@ -358,13 +366,20 @@ else
         _statusMessage = null;
         try
         {
-            var preferences = new UserMediaPreferences(
+            // Save device preferences to cookie
+            var devicePrefs = new DevicePreferences(
                 NormalizeSelection(_formModel.CameraDeviceId),
-                NormalizeSelection(_formModel.MicrophoneDeviceId),
+                NormalizeSelection(_formModel.MicrophoneDeviceId));
+            await DevicePreferencesService.SaveDevicePreferencesAsync(devicePrefs);
+
+            // Save language and tags to server (without device IDs)
+            var serverPrefs = new UserMediaPreferences(
+                null,
+                null,
                 NormalizeLanguageSelection(_formModel.TranscriptLanguage),
                 ParseFavoriteTags(_formModel.FavoriteTags));
+            await MediaSettingsClient.SaveMediaPreferencesAsync(serverPrefs);
 
-            await MediaSettingsClient.SaveMediaPreferencesAsync(preferences);
             _statusMessage = "Preferences saved. Future recordings will use the selected devices.";
         }
         catch (Exception ex)
@@ -407,12 +422,12 @@ else
             : UserMediaPreferences.Default.TranscriptLanguage;
     }
 
-    private static bool IsUnconfigured(UserMediaPreferences preferences)
+    private static bool IsUnconfigured(DevicePreferences devicePrefs, UserMediaPreferences serverPrefs)
     {
-        var hasCamera = !string.IsNullOrWhiteSpace(preferences.CameraDeviceId);
-        var hasMicrophone = !string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId);
-        var hasFavoriteTags = preferences.FavoriteTags is { Count: > 0 };
-        var language = NormalizeLanguageForInput(preferences.TranscriptLanguage);
+        var hasCamera = !string.IsNullOrWhiteSpace(devicePrefs.CameraDeviceId);
+        var hasMicrophone = !string.IsNullOrWhiteSpace(devicePrefs.MicrophoneDeviceId);
+        var hasFavoriteTags = serverPrefs.FavoriteTags is { Count: > 0 };
+        var language = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
         var hasCustomLanguage = !string.Equals(
             language,
             UserMediaPreferences.Default.TranscriptLanguage,

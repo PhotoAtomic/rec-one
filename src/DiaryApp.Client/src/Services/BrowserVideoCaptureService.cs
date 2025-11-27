@@ -5,14 +5,14 @@ using Microsoft.JSInterop;
 
 namespace DiaryApp.Client.Services;
 
-public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSettingsClient settingsClient) : IVideoCaptureService, IAsyncDisposable
+public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IDevicePreferencesService devicePreferencesService) : IVideoCaptureService, IAsyncDisposable
 {
     private IJSObjectReference? _module;
 
     public async Task StartRecordingAsync(ElementReference videoElement, ElementReference? meterElement = null, bool captureScreen = false)
     {
         _module ??= await jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/videoRecorder.js");
-        var preferences = await settingsClient.GetMediaPreferencesAsync();
+        var preferences = await devicePreferencesService.GetDevicePreferencesAsync();
         var options = new
         {
             cameraDeviceId = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId,
@@ -29,7 +29,7 @@ public sealed class BrowserVideoCaptureService(IJSRuntime jsRuntime, IMediaSetti
             return;
         }
 
-        var preferences = await settingsClient.GetMediaPreferencesAsync();
+        var preferences = await devicePreferencesService.GetDevicePreferencesAsync();
         var options = new
         {
             cameraDeviceId = string.IsNullOrWhiteSpace(preferences.CameraDeviceId) ? null : preferences.CameraDeviceId,

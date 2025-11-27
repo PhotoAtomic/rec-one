@@ -17,6 +17,7 @@ builder.Services.AddScoped<ITitleClient, TitleClient>();
 builder.Services.AddScoped<ISearchClient, SearchClient>();
 builder.Services.AddScoped<IMediaSettingsClient, MediaSettingsClient>();
 builder.Services.AddScoped<IServerSettingsClient, ServerSettingsClient>();
+builder.Services.AddScoped<IDevicePreferencesService, DevicePreferencesService>();
 builder.Services.AddScoped<VideoUploadService>();
 builder.Services.AddScoped<IOutgoingUploadQueue, OutgoingUploadQueue>();
 builder.Services.AddScoped<AuthenticationStatusService>();
