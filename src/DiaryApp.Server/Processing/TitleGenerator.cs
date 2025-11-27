@@ -54,6 +54,11 @@ public sealed class TitleGenerator : ITitleGenerator
 
     public async Task<string?> GenerateTitleAsync(VideoEntryDto entry, string? summary, CancellationToken cancellationToken)
     {
+        return await GenerateTitleAsync(entry, summary, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GenerateTitleAsync(VideoEntryDto entry, string? summary, string? preferredLanguage, CancellationToken cancellationToken)
+    {
         if (!_options.Enabled || _chatClient is null)
         {
             return null;
@@ -67,12 +72,22 @@ public sealed class TitleGenerator : ITitleGenerator
 
         try
         {
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(_systemPrompt)
+            };
+            
+            // Add language hint if preference is provided and not default English
+            if (!string.IsNullOrWhiteSpace(preferredLanguage) && 
+                !preferredLanguage.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+            {
+                messages.Add(new SystemChatMessage($"As a hint, the user's preferred language is {preferredLanguage}. If possible, complete the task using this language."));
+            }
+
+            messages.Add(new UserChatMessage($"<summary>{source}</summary>"));
+
             var completion = await _chatClient.CompleteChatAsync(
-                new ChatMessage[]
-                {
-                    new SystemChatMessage(_systemPrompt),
-                    new UserChatMessage($"<summary>{source}</summary>")
-                },
+                messages,
                 options: null,
                 cancellationToken).ConfigureAwait(false);
 

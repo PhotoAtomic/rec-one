@@ -57,6 +57,11 @@ public sealed class SummaryGenerator : ISummaryGenerator
 
     public async Task<string?> SummarizeAsync(VideoEntryDto entry, string? transcript, CancellationToken cancellationToken)
     {
+        return await SummarizeAsync(entry, transcript, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> SummarizeAsync(VideoEntryDto entry, string? transcript, string? preferredLanguage, CancellationToken cancellationToken)
+    {
         if (!_options.Enabled || _chatClient is null || string.IsNullOrWhiteSpace(transcript))
         {
             return null;
@@ -64,12 +69,22 @@ public sealed class SummaryGenerator : ISummaryGenerator
 
         try
         {
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(_systemPrompt)
+            };
+            
+            // Add language hint if preference is provided and not default English
+            if (!string.IsNullOrWhiteSpace(preferredLanguage) && 
+                !preferredLanguage.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+            {
+                messages.Add(new SystemChatMessage($"As a hint, the user's preferred language is {preferredLanguage}. If possible, complete the task using this language."));
+            }
+
+            messages.Add(new AssistantChatMessage($"<transcript>{transcript}</transcript>"));
+
             var completion = await _chatClient.CompleteChatAsync(
-                new ChatMessage[]
-                {
-                    new SystemChatMessage(_systemPrompt),
-                    new AssistantChatMessage($"<transcript>{transcript}</transcript>")
-                },
+                messages,
                 options: null,
                 cancellationToken).ConfigureAwait(false);
 

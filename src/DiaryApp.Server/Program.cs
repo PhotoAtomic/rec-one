@@ -622,6 +622,17 @@ internal static class EntryEndpointHelpers
         ITagSuggestionGenerator tagSuggestions,
         CancellationToken cancellationToken)
     {
+        return await SuggestTagsAsync(description, currentTags, null, store, tagSuggestions, cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<IReadOnlyCollection<string>> SuggestTagsAsync(
+        string description,
+        IReadOnlyCollection<string> currentTags,
+        string? userSegment,
+        IVideoEntryStore store,
+        ITagSuggestionGenerator tagSuggestions,
+        CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(description))
         {
             return Array.Empty<string>();
@@ -633,7 +644,10 @@ internal static class EntryEndpointHelpers
             return Array.Empty<string>();
         }
 
-        var preferences = await store.GetPreferencesAsync(cancellationToken);
+        var preferences = string.IsNullOrWhiteSpace(userSegment)
+            ? await store.GetPreferencesAsync(cancellationToken).ConfigureAwait(false)
+            : await store.GetPreferencesAsync(userSegment, cancellationToken).ConfigureAwait(false);
+        
         var favoriteTags = (preferences.FavoriteTags ?? Array.Empty<string>()).ToArray();
         if (favoriteTags.Length == 0)
         {
@@ -644,7 +658,7 @@ internal static class EntryEndpointHelpers
             trimmedDescription,
             favoriteTags,
             currentTags,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         if (suggestions.Count == 0)
         {

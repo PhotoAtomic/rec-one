@@ -12,6 +12,7 @@ public interface IVideoEntryStore
     Task UpdateAsync(Guid id, string userSegment, VideoEntryUpdateRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<UserMediaPreferences> GetPreferencesAsync(CancellationToken cancellationToken);
+    Task<UserMediaPreferences> GetPreferencesAsync(string userSegment, CancellationToken cancellationToken);
     Task UpdatePreferencesAsync(UserMediaPreferences preferences, CancellationToken cancellationToken);
     Task UpdateDescriptionEmbeddingAsync(Guid id, float[]? embedding, CancellationToken cancellationToken);
     Task UpdateProcessingStatusAsync(Guid id, VideoEntryProcessingStatus status, CancellationToken cancellationToken);

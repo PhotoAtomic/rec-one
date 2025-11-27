@@ -12,11 +12,13 @@ public interface ITranscriptGenerator
 public interface ISummaryGenerator
 {
     Task<string?> SummarizeAsync(VideoEntryDto entry, string? transcript, CancellationToken cancellationToken);
+    Task<string?> SummarizeAsync(VideoEntryDto entry, string? transcript, string? preferredLanguage, CancellationToken cancellationToken);
 }
 
 public interface ITitleGenerator
 {
     Task<string?> GenerateTitleAsync(VideoEntryDto entry, string? summary, CancellationToken cancellationToken);
+    Task<string?> GenerateTitleAsync(VideoEntryDto entry, string? summary, string? preferredLanguage, CancellationToken cancellationToken);
 }
 
 public interface ITagSuggestionGenerator

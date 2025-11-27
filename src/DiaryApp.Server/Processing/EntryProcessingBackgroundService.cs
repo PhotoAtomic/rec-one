@@ -168,6 +168,10 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
             _logger.LogInformation("Entry {EntryId} has VideoPath: {VideoPath}", entry.Id, entry.VideoPath);
 
+            // Get user preferences to retrieve language preference
+            var preferences = await _store.GetPreferencesAsync(request.UserSegment, cancellationToken).ConfigureAwait(false);
+            var preferredLanguage = preferences?.TranscriptLanguage;
+
             await _store.UpdateProcessingStatusAsync(entry.Id, request.UserSegment, VideoEntryProcessingStatus.InProgress, cancellationToken).ConfigureAwait(false);
 
             string? transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
@@ -189,8 +193,8 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             var finalDescription = entry.Description;
             if (_summaryEnabled && finalDescription is null && !string.IsNullOrWhiteSpace(transcript))
             {
-                _logger.LogInformation("Generating summary for entry {EntryId}...", entry.Id);
-                var generatedDescription = await _summaries.SummarizeAsync(entry, transcript, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Generating summary for entry {EntryId} with preferred language: {Language}...", entry.Id, preferredLanguage ?? "auto-detect");
+                var generatedDescription = await _summaries.SummarizeAsync(entry, transcript, preferredLanguage, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(generatedDescription))
                 {
                     finalDescription = generatedDescription;
@@ -209,8 +213,8 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
 
             if (_titleGenerationEnabled && !userProvidedTitle && !string.IsNullOrWhiteSpace(titleSource))
             {
-                _logger.LogInformation("Generating title for entry {EntryId}...", entry.Id);
-                generatedTitle = await _titles.GenerateTitleAsync(entry, titleSource, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Generating title for entry {EntryId} with preferred language: {Language}...", entry.Id, preferredLanguage ?? "auto-detect");
+                generatedTitle = await _titles.GenerateTitleAsync(entry, titleSource, preferredLanguage, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(generatedTitle))
                 {
                     finalTitle = generatedTitle;
@@ -230,6 +234,7 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
                 var suggestedTags = await EntryEndpointHelpers.SuggestTagsAsync(
                     finalDescription,
                     tags,
+                    request.UserSegment,
                     _store,
                     _tagSuggestions,
                     cancellationToken).ConfigureAwait(false);

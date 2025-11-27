@@ -271,12 +271,23 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<UserMediaPreferences> GetPreferencesAsync(CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        return await GetPreferencesAsync(userSegment, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<UserMediaPreferences> GetPreferencesAsync(string userSegment, CancellationToken cancellationToken)
+    {
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return GetOrCreatePreferences(userSegment);
+            if (!_preferencesByUser.TryGetValue(userSegment, out var preferences))
+            {
+                preferences = UserMediaPreferences.Default;
+                _preferencesByUser[userSegment] = preferences;
+            }
+
+            return preferences;
         }
         finally
         {
