@@ -1,0 +1,144 @@
+@using Microsoft.JSInterop
+@inject HttpClient Http
+
+@if (_isVisible)
+{
+    <div class="disclaimer-overlay" @onclick="OnOverlayClick">
+        <div class="disclaimer-modal" @onclick:stopPropagation="true">
+            <div class="disclaimer-header">
+                <h2>Important Notice</h2>
+                @if (AllowDismiss)
+                {
+                    <button class="disclaimer-close" @onclick="CloseDisclaimer" aria-label="Close">&times;</button>
+                }
+            </div>
+            <div class="disclaimer-content">
+                @if (_disclaimerText != null)
+                {
+                    @foreach (var line in _disclaimerText.Split('\n'))
+                    {
+                        <p>@line</p>
+                    }
+                }
+            </div>
+            <div class="disclaimer-footer">
+                @if (!AllowDismiss)
+                {
+                    <label class="disclaimer-checkbox">
+                        <input type="checkbox" @bind="_acknowledged" />
+                        <span>I understand and accept these terms</span>
+                    </label>
+                }
+                <button class="disclaimer-button" @onclick="AcceptDisclaimer" disabled="@(!AllowDismiss && !_acknowledged)">
+                    @(AllowDismiss ? "Close" : "Continue")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool AutoShow { get; set; } = true;
+    [Parameter] public bool AllowDismiss { get; set; } = false;
+    [Parameter] public EventCallback OnAccepted { get; set; }
+
+    private bool _isVisible;
+    private bool _acknowledged;
+    private string? _disclaimerText;
+    private const string DisclaimerCookieName = "DiaryApp.DisclaimerAccepted";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load disclaimer text from API
+        try
+        {
+            var response = await Http.GetFromJsonAsync<DisclaimerOptions>("/api/settings/disclaimer");
+            _disclaimerText = response?.Text;
+        }
+        catch
+        {
+            _disclaimerText = null;
+        }
+
+        if (AutoShow && !string.IsNullOrWhiteSpace(_disclaimerText))
+        {
+            // Check if disclaimer was already accepted
+            var cookieValue = await GetDisclaimerCookieAsync();
+            _isVisible = cookieValue != "true";
+        }
+    }
+
+    public async Task Show()
+    {
+        if (!string.IsNullOrWhiteSpace(_disclaimerText))
+        {
+            _isVisible = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task AcceptDisclaimer()
+    {
+        if (!AllowDismiss && !_acknowledged)
+        {
+            return;
+        }
+
+        if (!AllowDismiss)
+        {
+            await SetDisclaimerCookieAsync("true", 365);
+        }
+
+        _isVisible = false;
+        await OnAccepted.InvokeAsync();
+    }
+
+    private async Task CloseDisclaimer()
+    {
+        _isVisible = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnOverlayClick()
+    {
+        if (AllowDismiss)
+        {
+            _isVisible = false;
+        }
+    }
+
+    private async Task<string?> GetDisclaimerCookieAsync()
+    {
+        try
+        {
+            var result = await JSRuntime.InvokeAsync<string?>("eval", 
+                $"document.cookie.split('; ').find(row => row.startsWith('{DisclaimerCookieName}='))?.split('=')[1]");
+            return result;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task SetDisclaimerCookieAsync(string value, int days)
+    {
+        try
+        {
+            var expires = DateTime.UtcNow.AddDays(days).ToString("R");
+            await JSRuntime.InvokeVoidAsync("eval", 
+                $"document.cookie = '{DisclaimerCookieName}={value}; expires={expires}; path=/; SameSite=Lax'");
+        }
+        catch
+        {
+            // Cookie set failures are non-fatal
+        }
+    }
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    private sealed class DisclaimerOptions
+    {
+        public string? Text { get; set; }
+    }
+}

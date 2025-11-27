@@ -18,15 +18,52 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Explicitly load user secrets in Development
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddUserSecrets<Program>();
+}
+
+// Debug: Show all configuration sources
+Console.WriteLine("=== CONFIGURATION SOURCES ===");
+foreach (var source in ((IConfigurationRoot)builder.Configuration).Providers)
+{
+    Console.WriteLine($"  - {source.GetType().Name}");
+}
+Console.WriteLine("=============================");
+
 builder.Services.AddOptions<StorageOptions>().BindConfiguration(StorageOptions.SectionName);
 builder.Services.AddOptions<TranscriptOptions>().BindConfiguration(TranscriptOptions.SectionName);
 builder.Services.AddOptions<SummaryOptions>().BindConfiguration(SummaryOptions.SectionName);
 builder.Services.AddOptions<TitleGenerationOptions>().BindConfiguration(TitleGenerationOptions.SectionName);
 builder.Services.AddOptions<TagSuggestionOptions>().BindConfiguration(TagSuggestionOptions.SectionName);
 builder.Services.AddOptions<SemanticSearchOptions>().BindConfiguration(SemanticSearchOptions.SectionName);
+builder.Services.AddOptions<OidcAuthenticationOptions>().BindConfiguration(OidcAuthenticationOptions.SectionName);
+builder.Services.AddOptions<DisclaimerOptions>().BindConfiguration(DisclaimerOptions.SectionName);
 
-var keysDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DiaryApp", "keys");
+// Use a keys directory relative to the content root for development, or LocalApplicationData for production
+var keysDirectory = builder.Environment.IsDevelopment()
+    ? Path.Combine(builder.Environment.ContentRootPath, "..", "keys")
+    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DiaryApp", "keys");
+
 Directory.CreateDirectory(keysDirectory);
+
+// Debug: Log keys directory location
+Console.WriteLine($"=== DATA PROTECTION KEYS ===");
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+Console.WriteLine($"Keys Directory: {keysDirectory}");
+Console.WriteLine($"Keys Directory Exists: {Directory.Exists(keysDirectory)}");
+if (Directory.Exists(keysDirectory))
+{
+    var keyFiles = Directory.GetFiles(keysDirectory, "*.xml");
+    Console.WriteLine($"Number of Key Files: {keyFiles.Length}");
+    foreach (var keyFile in keyFiles)
+    {
+        Console.WriteLine($"  - {Path.GetFileName(keyFile)} (Created: {File.GetCreationTime(keyFile)})");
+    }
+}
+Console.WriteLine($"============================");
+
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
     .SetApplicationName("DiaryApp");
@@ -44,37 +81,105 @@ builder.Services.AddHostedService<EntryProcessingBackgroundService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<HttpsCertificateService>();
 
-var oidcSection = builder.Configuration.GetSection("Authentication:OIDC");
-var authenticationConfigured = oidcSection.Exists() && !string.IsNullOrWhiteSpace(oidcSection["Authority"]);
+// Manually construct authentication options due to binding issues with record types
+var authSection = builder.Configuration.GetSection(OidcAuthenticationOptions.SectionName);
+var microsoftSection = authSection.GetSection("Microsoft");
+var googleSection = authSection.GetSection("Google");
+
+var microsoftConfig = new OidcProviderConfiguration
+{
+    Authority = microsoftSection["Authority"],
+    ClientId = microsoftSection["ClientId"],
+    ClientSecret = microsoftSection["ClientSecret"],
+    ResponseType = microsoftSection["ResponseType"],
+    CallbackPath = microsoftSection["CallbackPath"]
+};
+
+var googleConfig = new OidcProviderConfiguration
+{
+    Authority = googleSection["Authority"],
+    ClientId = googleSection["ClientId"],
+    ClientSecret = googleSection["ClientSecret"],
+    ResponseType = googleSection["ResponseType"],
+    CallbackPath = googleSection["CallbackPath"]
+};
+
+var authOptions = new OidcAuthenticationOptions
+{
+    Microsoft = microsoftConfig,
+    Google = googleConfig
+};
+
+var authenticationConfigured = authOptions?.AnyProviderConfigured() == true;
+
+// Debug logging - Check raw configuration values
+Console.WriteLine($"=== AUTHENTICATION CONFIGURATION ===");
+Console.WriteLine($"Auth Options: {(authOptions == null ? "NULL" : "Present")}");
+Console.WriteLine($"Raw Config Check:");
+Console.WriteLine($"  - Authentication:Microsoft:Authority = {builder.Configuration["Authentication:Microsoft:Authority"]}");
+Console.WriteLine($"  - Authentication:Microsoft:ClientId = {builder.Configuration["Authentication:Microsoft:ClientId"]}");
+Console.WriteLine($"Bound Options:");
+Console.WriteLine($"  - Microsoft.Authority: {authOptions?.Microsoft?.Authority}");
+Console.WriteLine($"  - Microsoft.ClientId: {authOptions?.Microsoft?.ClientId}");
+Console.WriteLine($"  - Microsoft.IsConfigured: {authOptions?.Microsoft?.IsConfigured()}");
+Console.WriteLine($"Authentication Configured: {authenticationConfigured}");
+Console.WriteLine($"===================================");
+
 if (authenticationConfigured)
 {
-    builder.Services.AddAuthentication(options =>
+    var authBuilder = builder.Services.AddAuthentication(options =>
     {
         options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     })
-        .AddCookie(options =>
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "DiaryApp.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.IsEssential = true;
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+        options.LoginPath = "/login";
+    });
+
+    if (authOptions!.Microsoft.IsConfigured())
+    {
+        authBuilder.AddOpenIdConnect("Microsoft", options =>
         {
-            options.Cookie.Name = "DiaryApp.Auth";
-            options.Cookie.HttpOnly = true;
-            options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
-                ? CookieSecurePolicy.SameAsRequest
-                : CookieSecurePolicy.Always;
-            options.Cookie.SameSite = SameSiteMode.Lax;
-            options.Cookie.IsEssential = true;
-            options.ExpireTimeSpan = TimeSpan.FromDays(30);
-            options.SlidingExpiration = true;
-        })
-        .AddOpenIdConnect(options =>
-        {
-            options.Authority = oidcSection["Authority"];
-            options.ClientId = oidcSection["ClientId"] ?? "diary-app";
-            options.ClientSecret = oidcSection["ClientSecret"];
-            options.ResponseType = oidcSection["ResponseType"] ?? "code";
+            options.Authority = authOptions.Microsoft.Authority;
+            options.ClientId = authOptions.Microsoft.ClientId;
+            options.ClientSecret = authOptions.Microsoft.ClientSecret;
+            options.ResponseType = authOptions.Microsoft.ResponseType ?? "code";
+            options.CallbackPath = authOptions.Microsoft.CallbackPath ?? "/signin-microsoft";
             options.SaveTokens = true;
             options.Scope.Add("profile");
+            options.Scope.Add("email");
             options.TokenValidationParameters.NameClaimType = "preferred_username";
+            options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         });
+    }
+
+    if (authOptions.Google.IsConfigured())
+    {
+        authBuilder.AddOpenIdConnect("Google", options =>
+        {
+            options.Authority = authOptions.Google.Authority ?? "https://accounts.google.com";
+            options.ClientId = authOptions.Google.ClientId;
+            options.ClientSecret = authOptions.Google.ClientSecret;
+            options.ResponseType = authOptions.Google.ResponseType ?? "code";
+            options.CallbackPath = authOptions.Google.CallbackPath ?? "/signin-google";
+            options.SaveTokens = true;
+            options.Scope.Add("profile");
+            options.Scope.Add("email");
+            options.TokenValidationParameters.NameClaimType = "name";
+            options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        });
+    }
+
     builder.Services.AddAuthorization();
 }
 else
@@ -430,12 +535,7 @@ entries.MapGet("/{id:guid}/summary", async (Guid id, IVideoEntryStore store, Can
 entries.MapGet("/{id:guid}/title", async (Guid id, IVideoEntryStore store, CancellationToken cancellationToken) =>
 {
     var entry = await store.GetAsync(id, cancellationToken);
-    if (entry is null)
-    {
-        return Results.NotFound();
-    }
-
-    return string.IsNullOrWhiteSpace(entry.Title)
+    return entry is null
         ? Results.NotFound()
         : Results.Ok(entry.Title);
 });
@@ -511,21 +611,71 @@ app.MapGet("/authentication/status", (HttpContext context) =>
       return Results.Json(payload, DiaryAppJsonSerializerContext.Default.UserStatusDto);
   }).AllowAnonymous();
 
+app.MapGet("/authentication/providers", () =>
+{
+    var providers = new List<AuthenticationProviderInfo>();
+
+    if (authOptions.Microsoft.IsConfigured())
+    {
+        providers.Add(new AuthenticationProviderInfo("Microsoft", "Microsoft", "/login/microsoft"));
+    }
+
+    if (authOptions.Google.IsConfigured())
+    {
+        providers.Add(new AuthenticationProviderInfo("Google", "Google", "/login/google"));
+    }
+
+    var response = new AvailableProvidersDto(authenticationConfigured, providers);
+    return Results.Json(response, DiaryAppJsonSerializerContext.Default.AvailableProvidersDto);
+}).AllowAnonymous();
+
+app.MapGet("/api/settings/disclaimer", (IOptions<DisclaimerOptions> disclaimerOptions) =>
+{
+    return Results.Json(disclaimerOptions.Value, DiaryAppJsonSerializerContext.Default.DisclaimerOptions);
+}).AllowAnonymous();
+
 if (authenticationConfigured)
 {
-    app.MapGet("/login", async (HttpContext context) =>
+    // Provider-specific login endpoints
+    app.MapGet("/login/microsoft", async (HttpContext context) =>
     {
-        await context.ChallengeAsync(
-            OpenIdConnectDefaults.AuthenticationScheme,
-            new AuthenticationProperties { RedirectUri = "/" });
+        if (!authOptions.Microsoft.IsConfigured())
+        {
+            return Results.NotFound();
+        }
+
+        await context.ChallengeAsync("Microsoft", new AuthenticationProperties 
+        { 
+            RedirectUri = "/",
+            Items = { [".AuthScheme"] = "Microsoft" }
+        });
+        return Results.Empty;
+    }).AllowAnonymous();
+
+    app.MapGet("/login/google", async (HttpContext context) =>
+    {
+        if (!authOptions.Google.IsConfigured())
+        {
+            return Results.NotFound();
+        }
+
+        await context.ChallengeAsync("Google", new AuthenticationProperties 
+        { 
+            RedirectUri = "/",
+            Items = { [".AuthScheme"] = "Google" }
+        });
+        return Results.Empty;
     }).AllowAnonymous();
 
     app.MapGet("/logout", async (HttpContext context) =>
     {
+        var authResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var scheme = authResult?.Properties?.Items.TryGetValue(".AuthScheme", out var s) == true && !string.IsNullOrEmpty(s)
+            ? s
+            : "Microsoft"; // fallback to first provider
+
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        await context.SignOutAsync(
-            OpenIdConnectDefaults.AuthenticationScheme,
-            new AuthenticationProperties { RedirectUri = "/" });
+        await context.SignOutAsync(scheme, new AuthenticationProperties { RedirectUri = "/" });
     }).RequireAuthorization();
 }
 

@@ -45,6 +45,32 @@ html, body {
     color: #cddfff;
 }
 
+.nav-disclaimer-button {
+    background: none;
+    border: none;
+    padding: 0.35rem 0.5rem;
+    margin: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.nav-disclaimer-button:hover {
+    transform: scale(1.1);
+}
+
+.disclaimer-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-block;
+    color: #ffb74d;
+}
+
+.nav-disclaimer-button:hover .disclaimer-icon {
+    color: #ffa726;
+}
+
 .login-required {
     padding: 2rem;
     margin-top: 2rem;
@@ -420,4 +446,53 @@ a.icon-button.danger:hover {
     to {
         transform: rotate(360deg);
     }
+}
+
+.disclaimer-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.provider-button {
+    display: block;
+    width: 100%;
+    padding: 14px 20px;
+    margin: 12px 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #f0f4ff;
+    font-family: inherit;
+}
+
+.provider-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.provider-button.microsoft {
+    background: rgba(47, 47, 47, 0.8);
+    border-color: rgba(138, 180, 255, 0.3);
+}
+
+.provider-button.microsoft:hover {
+    background: rgba(47, 47, 47, 1);
+    border-color: rgba(138, 180, 255, 0.5);
+}
+
+.provider-button.google {
+    background: rgba(66, 133, 244, 0.8);
+    border-color: rgba(138, 180, 255, 0.3);
+}
+
+.provider-button.google:hover {
+    background: rgba(66, 133, 244, 1);
+    border-color: rgba(138, 180, 255, 0.5);
 }

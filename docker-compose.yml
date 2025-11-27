@@ -16,10 +16,29 @@ services:
       Kestrel__Endpoints__Https__Certificate__Path: /https/rec-one.pfx
       Kestrel__Endpoints__Https__Certificate__Password: <pfx-password>
       Storage__RootDirectory: /data/entries
-      # Authentication__OIDC__Authority: https://login.microsoftonline.com/<tenant-id>/v2.0
-      # Authentication__OIDC__ClientId: <client-id>
-      # Authentication__OIDC__ClientSecret: <client-secret>
-      # Authentication__OIDC__ResponseType: code
+      
+      # Authentication - Microsoft (Azure AD / Entra ID)
+      # Register your app at https://portal.azure.com → App Registrations
+      # Add redirect URI: https://your-domain.com/signin-microsoft
+      # Authentication__Microsoft__Authority: https://login.microsoftonline.com/<tenant-id>/v2.0
+      # Authentication__Microsoft__ClientId: <application-client-id>
+      # Authentication__Microsoft__ClientSecret: <client-secret>
+      # Authentication__Microsoft__ResponseType: code
+      # Authentication__Microsoft__CallbackPath: /signin-microsoft
+      
+      # Authentication - Google OAuth 2.0
+      # Create OAuth credentials at https://console.cloud.google.com
+      # Add redirect URI: https://your-domain.com/signin-google
+      # Authentication__Google__Authority: https://accounts.google.com
+      # Authentication__Google__ClientId: <google-client-id>.apps.googleusercontent.com
+      # Authentication__Google__ClientSecret: <google-client-secret>
+      # Authentication__Google__ResponseType: code
+      # Authentication__Google__CallbackPath: /signin-google
+      
+      # Disclaimer text shown on login page (optional)
+      # Use \n for line breaks and - for bullet points
+      # Disclaimer__Text: "TECHNICAL DEMONSTRATOR - BETA VERSION\n\nThis is a technical demonstrator..."
+      
       Transcription__Enabled: "false"
       Transcription__Provider: AzureSpeech
       Transcription__Settings__SpeechKey: <speech-api-key>

@@ -20,6 +20,7 @@ entries.json
 **/data/entries/**/*.embeddings
 **/data/entries/**/*.webm
 **/App_Data/keys/**/*
+src/keys/**
 
 # Mono auto generated files
 mono_crash.*

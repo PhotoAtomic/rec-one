@@ -15,17 +15,12 @@
                     <p>Loading...</p>
                 </div>
             }
-            else if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
+            else if (_status.AuthenticationEnabled && !_status.IsAuthenticated && !IsLoginPage())
             {
                 <section class="login-required">
                     <h1>Authentication Required</h1>
-                    <p>@(_silentRefreshFailed
-                        ? "We tried to refresh your sign-in silently, but it appears to have expired. Please log in to continue."
-                        : "Hold on, we're refreshing your sign-in...")</p>
-                    @if (_silentRefreshFailed)
-                    {
-                        <p><a href="/login">Click here</a> to sign in.</p>
-                    }
+                    <p>You need to sign in to use this application.</p>
+                    <p><a href="/login" class="nav-link" style="font-size: 1.2rem; font-weight: 600;">Sign In</a></p>
                 </section>
             }
             else
@@ -39,24 +34,16 @@
 @code {
     private UserStatusDto _status = new(false, null, false);
     private bool _statusLoaded;
-    private bool _attemptedSilentLogin;
-    private bool _silentRefreshFailed;
 
     protected override async Task OnInitializedAsync()
     {
         _status = await AuthStatusService.GetStatusAsync();
-        if (_status.AuthenticationEnabled && !_status.IsAuthenticated)
-        {
-            _status = await AuthStatusService.RefreshAsync();
-            if (!_status.IsAuthenticated && !_attemptedSilentLogin)
-            {
-                _attemptedSilentLogin = true;
-                NavigationManager.NavigateTo("/login", forceLoad: true);
-                return;
-            }
-
-            _silentRefreshFailed = !_status.IsAuthenticated;
-        }
         _statusLoaded = true;
+    }
+
+    private bool IsLoginPage()
+    {
+        var currentPath = new Uri(NavigationManager.Uri).AbsolutePath;
+        return currentPath.Equals("/login", StringComparison.OrdinalIgnoreCase);
     }
 }

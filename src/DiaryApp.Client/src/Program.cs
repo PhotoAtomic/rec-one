@@ -8,7 +8,10 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
+// In Blazor WebAssembly, cookies are automatically included for same-origin requests
+// The default HttpClient configuration is sufficient for cookie-based authentication
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+
 builder.Services.AddScoped<IVideoEntryClient, VideoEntryClient>();
 builder.Services.AddScoped<IVideoCaptureService, BrowserVideoCaptureService>();
 builder.Services.AddScoped<ITranscriptionClient, TranscriptionClient>();

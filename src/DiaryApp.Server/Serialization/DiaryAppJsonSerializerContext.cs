@@ -32,6 +32,12 @@ namespace DiaryApp.Server.Serialization;
 [JsonSerializable(typeof(ChunkedUploadCompleteRequest))]
 [JsonSerializable(typeof(UploadChunkResponse))]
 [JsonSerializable(typeof(HttpsCertificateInfo))]
+[JsonSerializable(typeof(AuthenticationProviderInfo))]
+[JsonSerializable(typeof(AuthenticationProviderInfo[]))]
+[JsonSerializable(typeof(List<AuthenticationProviderInfo>))]
+[JsonSerializable(typeof(IReadOnlyCollection<AuthenticationProviderInfo>))]
+[JsonSerializable(typeof(AvailableProvidersDto))]
+[JsonSerializable(typeof(DisclaimerOptions))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 internal partial class DiaryAppJsonSerializerContext : JsonSerializerContext;

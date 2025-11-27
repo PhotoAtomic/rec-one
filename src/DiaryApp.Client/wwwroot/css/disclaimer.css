@@ -1,0 +1,155 @@
+.disclaimer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+}
+
+.disclaimer-modal {
+    background: white;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: disclaimerFadeIn 0.3s ease;
+}
+
+@keyframes disclaimerFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.disclaimer-header {
+    padding: 24px 24px 16px;
+    border-bottom: 2px solid #f0f0f0;
+    position: relative;
+}
+
+.disclaimer-header h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #d32f2f;
+}
+
+.disclaimer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 32px;
+    line-height: 1;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.disclaimer-close:hover {
+    color: #d32f2f;
+}
+
+.disclaimer-content {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+    line-height: 1.6;
+}
+
+.disclaimer-content p {
+    margin: 0 0 12px;
+    color: #333;
+}
+
+.disclaimer-content p:first-child {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.disclaimer-footer {
+    padding: 20px 24px;
+    border-top: 2px solid #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.disclaimer-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.disclaimer-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.disclaimer-checkbox span {
+    font-size: 14px;
+    color: #555;
+}
+
+.disclaimer-button {
+    padding: 14px 28px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.disclaimer-button:hover:not(:disabled) {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.disclaimer-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+@media (max-width: 600px) {
+    .disclaimer-modal {
+        max-height: 90vh;
+        margin: 0;
+    }
+
+    .disclaimer-header h2 {
+        font-size: 20px;
+    }
+
+    .disclaimer-content {
+        font-size: 14px;
+    }
+}
