@@ -669,13 +669,11 @@ if (authenticationConfigured)
 
     app.MapGet("/logout", async (HttpContext context) =>
     {
-        var authResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        var scheme = authResult?.Properties?.Items.TryGetValue(".AuthScheme", out var s) == true && !string.IsNullOrEmpty(s)
-            ? s
-            : "Microsoft"; // fallback to first provider
-
+        // Only sign out from cookie authentication
+        // Do not attempt to sign out from OIDC providers (Microsoft/Google)
+        // as they require end session endpoints which may not be configured
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        await context.SignOutAsync(scheme, new AuthenticationProperties { RedirectUri = "/" });
+        return Results.Redirect("/");
     }).RequireAuthorization();
 }
 
