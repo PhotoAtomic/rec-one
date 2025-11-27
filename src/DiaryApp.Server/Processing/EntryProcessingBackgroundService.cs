@@ -177,8 +177,8 @@ public sealed class EntryProcessingBackgroundService : BackgroundService
             string? transcript = await TranscriptFileStore.ReadTranscriptAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(transcript) && _transcriptionEnabled)
             {
-                _logger.LogInformation("Generating transcript for entry {EntryId}...", entry.Id);
-                transcript = await _transcripts.GenerateAsync(entry, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Generating transcript for entry {EntryId} with preferred language: {Language}...", entry.Id, preferredLanguage ?? "auto-detect");
+                transcript = await _transcripts.GenerateAsync(entry, preferredLanguage, cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(transcript))
                 {
                     _logger.LogWarning("Transcript generation returned empty result for entry {EntryId}.", entry.Id);

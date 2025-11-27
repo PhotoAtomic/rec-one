@@ -7,6 +7,7 @@ namespace DiaryApp.Server.Processing;
 public interface ITranscriptGenerator
 {
     Task<string?> GenerateAsync(VideoEntryDto entry, CancellationToken cancellationToken);
+    Task<string?> GenerateAsync(VideoEntryDto entry, string? preferredLanguage, CancellationToken cancellationToken);
 }
 
 public interface ISummaryGenerator

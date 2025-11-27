@@ -46,6 +46,11 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
 
     public async Task<string?> GenerateAsync(VideoEntryDto entry, CancellationToken cancellationToken)
     {
+        return await GenerateAsync(entry, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GenerateAsync(VideoEntryDto entry, string? preferredLanguage, CancellationToken cancellationToken)
+    {
         if (!_options.Enabled || string.IsNullOrWhiteSpace(entry.VideoPath))
         {
             return entry.Transcript;
@@ -57,7 +62,10 @@ public sealed class TranscriptGenerator : ITranscriptGenerator
             return entry.Transcript;
         }
 
-        var transcriptLanguage = await ResolveTranscriptLanguageAsync(cancellationToken);
+        var transcriptLanguage = string.IsNullOrWhiteSpace(preferredLanguage)
+            ? await ResolveTranscriptLanguageAsync(cancellationToken).ConfigureAwait(false)
+            : preferredLanguage;
+            
         var transcriptPath = TranscriptFileStore.GetTranscriptPath(entry.VideoPath);
         var fileLock = FileLocks.GetOrAdd(transcriptPath, static _ => new SemaphoreSlim(1, 1));
         await fileLock.WaitAsync(cancellationToken);
