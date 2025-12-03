@@ -1,5 +1,6 @@
 @using DiaryApp.Shared.Abstractions
 @inject DiaryApp.Client.Services.AuthenticationStatusService AuthStatusService
+@using System.Reflection
 
 <nav class="nav-menu">
     @if (!_statusLoaded)
@@ -41,6 +42,7 @@
             }
         </div>
     }
+    <span class="nav-version">v@_version</span>
 </nav>
 
 <DisclaimerModal @ref="_disclaimerModal" AutoShow="false" AllowDismiss="true" />
@@ -49,11 +51,18 @@
     private UserStatusDto _status = new(false, null, false);
     private bool _statusLoaded;
     private DisclaimerModal? _disclaimerModal;
+    private string _version = "";
 
     protected override async Task OnInitializedAsync()
     {
         _status = await AuthStatusService.GetStatusAsync();
         _statusLoaded = true;
+        var clientAssembly = typeof(App).Assembly;
+        var version = clientAssembly.GetName().Version;
+        var versionString = version != null
+            ? $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}"
+            : "1.0.0.0";
+        _version = versionString;
     }
 
     private async Task ShowDisclaimer()
