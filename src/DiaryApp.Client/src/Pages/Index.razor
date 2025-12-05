@@ -6,6 +6,7 @@
 @inject VideoUploadService UploadService
 @inject IOutgoingUploadQueue OutgoingQueue
 @inject IDevicePreferencesService DevicePreferencesService
+@inject IMediaSettingsClient MediaSettingsClient
 @inject IJSRuntime JsRuntime
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
@@ -36,10 +37,19 @@
 </section>
 
 <EditForm Model="this" OnValidSubmit="SaveEntry">
-    <div @ref="_formContainer">
-    <input @bind="_title" placeholder="Entry title" @ref="_titleInput" />
-    <textarea @bind="_description" placeholder="Description" rows="3"></textarea>
-    <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
+    <details @ref="_formContainer" open="@_detailsExpanded">
+        <summary @onclick="ToggleDetails" @onclick:preventDefault>
+            <svg class="details-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>Manual Details</span>
+        </summary>
+        <div class="details-content">
+            <input @bind="_title" placeholder="Entry title" @ref="_titleInput" />
+            <textarea @bind="_description" placeholder="Description" rows="3"></textarea>
+            <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
+        </div>
+    </details>
 
     <button type="submit" disabled="@(!_hasRecording || _isSaving)" class="with-spinner">
         @if (_isSaving)
@@ -52,7 +62,6 @@
             <span>Save Entry</span>
         }
     </button>
-    </div>
 </EditForm>
 
 @if (!string.IsNullOrWhiteSpace(_statusMessage))
@@ -98,15 +107,23 @@
     private IJSObjectReference? _uiModule;
     private IJSObjectReference? _permissionsModule;
     private bool _pendingScrollToLastEntry;
+    private bool _detailsExpanded = false;
+
+    private void ToggleDetails()
+    {
+        _detailsExpanded = !_detailsExpanded;
+    }
 
     private async Task StartRecording()
     {
         _statusMessage = null;
 
-        // Check if user needs to configure devices or grant permissions
-        var needsSetup = await CheckIfNeedsDeviceSetupAsync();
-        if (needsSetup)
+        // Check if user needs to configure settings
+        var settingsValid = await ValidateSettingsAsync();
+        if (!settingsValid)
         {
+            _statusMessage = "Please configure your audio/video devices and language settings before recording.";
+            await Task.Delay(2000); // Give user time to read the message
             Navigation.NavigateTo("/settings");
             return;
         }
@@ -129,6 +146,35 @@
                 await Task.Delay(2000); // Give user time to read the message
                 Navigation.NavigateTo("/settings");
             }
+        }
+    }
+
+    private async Task<bool> ValidateSettingsAsync()
+    {
+        try
+        {
+            // Check device preferences (stored locally in browser)
+            var devicePrefs = await DevicePreferencesService.GetDevicePreferencesAsync();
+            var hasDevicesConfigured = !string.IsNullOrWhiteSpace(devicePrefs.CameraDeviceId) || 
+                                      !string.IsNullOrWhiteSpace(devicePrefs.MicrophoneDeviceId);
+
+            // Check server-side media preferences (language and tags)
+            var mediaPrefs = await MediaSettingsClient.GetMediaPreferencesAsync();
+            
+            // Verify that the language has been explicitly set (not just the default)
+            // We consider the settings valid if the user has kept the default language,
+            // but we want to ensure they visited the settings page at least once
+            var hasLanguageConfigured = !string.IsNullOrWhiteSpace(mediaPrefs.TranscriptLanguage);
+
+            // Settings are valid if:
+            // 1. At least one device (camera or microphone) is configured
+            // 2. AND a transcript language is set (even if it's the default)
+            return hasDevicesConfigured && hasLanguageConfigured;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to validate settings: {ex.Message}";
+            return false;
         }
     }
 
@@ -162,6 +208,11 @@
         await VideoCapture.StopRecordingAsync();
         _isRecording = false;
         _hasRecording = true;
+        
+        // Expand details section after stopping recording
+        _detailsExpanded = true;
+        StateHasChanged();
+        
         await ScrollToFormAsync();
         await FocusTitleAsync();
     }

@@ -18,4 +18,5 @@ public interface IVideoEntryStore
     Task UpdateProcessingStatusAsync(Guid id, VideoEntryProcessingStatus status, CancellationToken cancellationToken);
     Task UpdateProcessingStatusAsync(Guid id, string userSegment, VideoEntryProcessingStatus status, CancellationToken cancellationToken);
     string GetCurrentUserSegment();
+    void InvalidateUserCache(string? userSegment = null);
 }

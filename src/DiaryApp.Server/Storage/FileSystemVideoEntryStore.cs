@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -73,12 +74,16 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         var tags = metadata.Tags?.ToArray() ?? Array.Empty<string>();
         var embedding = await GenerateEmbeddingAsync(metadata.Description, cancellationToken).ConfigureAwait(false);
+        
+        // Convert absolute path to relative (just filename) for storage
+        var relativeVideoPath = ToRelativePath(filePath, userSegment);
+        
         var record = new StoredVideoEntry(
             id,
             metadata.Title,
             metadata.Description,
             tags,
-            filePath,
+            relativeVideoPath,
             startedAt,
             DateTimeOffset.UtcNow,
             VideoEntryProcessingStatus.None,
@@ -107,7 +112,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         {
             _gate.Release();
         }
-        return await ToDtoAsync(record, cancellationToken).ConfigureAwait(false);
+        return await ToDtoAsync(record, userSegment, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyCollection<VideoEntryDto>> ListAsync(CancellationToken cancellationToken)
@@ -129,7 +134,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             _gate.Release();
         }
 
-        return await ConvertToDtosAsync(entries, cancellationToken);
+        return await ConvertToDtosAsync(entries, userSegment, cancellationToken);
     }
 
     public async Task<VideoEntryDto?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -177,7 +182,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             _gate.Release();
         }
 
-        return stored is null ? null : await ToDtoAsync(stored, cancellationToken).ConfigureAwait(false);
+        return stored is null ? null : await ToDtoAsync(stored, userSegment, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateAsync(Guid id, VideoEntryUpdateRequest request, CancellationToken cancellationToken)
@@ -204,7 +209,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     ? await GenerateEmbeddingAsync(request.Description, cancellationToken).ConfigureAwait(false)
                     : null;
 
-                var videoPath = EnsureFinalVideoPath(existing, request.Title);
+                var videoPath = EnsureFinalVideoPath(existing, request.Title, userSegment);
 
                 var updated = existing with
                 {
@@ -217,14 +222,17 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                 };
                 cache[id] = updated;
 
+                // Resolve to absolute path for file operations
+                var absoluteVideoPath = ResolveVideoPath(updated.VideoPath, userSegment);
+                
                 if (!string.IsNullOrWhiteSpace(request.Transcript))
                 {
-                    await TranscriptFileStore.WriteTranscriptAsync(updated.VideoPath, request.Transcript, cancellationToken).ConfigureAwait(false);
+                    await TranscriptFileStore.WriteTranscriptAsync(absoluteVideoPath, request.Transcript, cancellationToken).ConfigureAwait(false);
                 }
 
                 if (descriptionChanged)
                 {
-                    await EmbeddingFileStore.WriteEmbeddingAsync(updated.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
+                    await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, embedding, cancellationToken).ConfigureAwait(false);
                 }
 
                 await PersistLockedAsync(userSegment, cancellationToken).ConfigureAwait(false);
@@ -276,19 +284,22 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             return true; // Entry was removed from index, but there's no file path to process.
         }
 
+        // Resolve the stored path to absolute for file operations
+        var absoluteVideoPath = ResolveVideoPath(removed.VideoPath, userSegment);
+
         if (allowDeepDelete)
         {
             // Hard delete: physically remove all associated files.
             _logger.LogWarning("Performing deep delete for entry {EntryId} by user {UserIdentifier}", id, userSegment);
-            TryDeleteFile(removed.VideoPath);
-            TryDeleteFile(TranscriptFileStore.GetTranscriptPath(removed.VideoPath));
-            EmbeddingFileStore.DeleteEmbedding(removed.VideoPath);
+            TryDeleteFile(absoluteVideoPath);
+            TryDeleteFile(TranscriptFileStore.GetTranscriptPath(absoluteVideoPath));
+            EmbeddingFileStore.DeleteEmbedding(absoluteVideoPath);
         }
         else
         {
             // Soft delete: remove from index but preserve files and create a .DELETED marker.
             _logger.LogInformation("Performing soft delete for entry {EntryId} by user {UserIdentifier}", id, userSegment);
-            var deletedMarkerPath = Path.ChangeExtension(removed.VideoPath, ".DELETED");
+            var deletedMarkerPath = Path.ChangeExtension(absoluteVideoPath, ".DELETED");
             try
             {
                 var json = JsonSerializer.Serialize(removed, DiaryAppJsonSerializerContext.Default.StoredVideoEntry);
@@ -361,13 +372,16 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                 return;
             }
 
+            // Resolve to absolute path for file operations
+            var absoluteVideoPath = ResolveVideoPath(existing.VideoPath, userSegment);
+            
             if (embedding is not null)
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(existing.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
+                await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                EmbeddingFileStore.DeleteEmbedding(existing.VideoPath);
+                EmbeddingFileStore.DeleteEmbedding(absoluteVideoPath);
             }
 
             cache[id] = existing with { DescriptionEmbedding = null };
@@ -407,7 +421,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
     }
 
-    private async Task<float[]?> GenerateEmbeddingAsync(string? description, CancellationToken cancellationToken)
+    private async Task<float[]?> GenerateEmbeddingAsync(String? description, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(description))
         {
@@ -443,7 +457,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             var cache = GetOrCreateCache(userSegment);
             var indexFile = GetIndexFile(userSegment);
             Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
-            var document = await ReadDocumentAsync(indexFile, cancellationToken).ConfigureAwait(false);
+            var document = await ReadDocumentAsync(indexFile, userSegment, cancellationToken).ConfigureAwait(false);
             foreach (var record in document.Entries)
             {
                 if (!string.IsNullOrWhiteSpace(record.DescriptionEmbedding))
@@ -451,7 +465,8 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                     var legacyEmbedding = EmbeddingSerializer.DeserializeLegacy(record.DescriptionEmbedding);
                     if (legacyEmbedding is not null && !string.IsNullOrWhiteSpace(record.VideoPath))
                     {
-                        await EmbeddingFileStore.WriteEmbeddingAsync(record.VideoPath, legacyEmbedding, cancellationToken).ConfigureAwait(false);
+                        var absoluteVideoPath = ResolveVideoPath(record.VideoPath, userSegment);
+                        await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, legacyEmbedding, cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -468,7 +483,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         }
     }
 
-    private async Task<StoredUserEntriesDocument> ReadDocumentAsync(string indexFile, CancellationToken cancellationToken)
+    private async Task<StoredUserEntriesDocument> ReadDocumentAsync(string indexFile, string userSegment, CancellationToken cancellationToken)
     {
         if (!File.Exists(indexFile))
         {
@@ -492,7 +507,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             try
             {
                 var legacyDocument = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.UserEntriesDocument, cancellationToken).ConfigureAwait(false);
-                return await ConvertLegacyDocumentAsync(legacyDocument, cancellationToken).ConfigureAwait(false);
+                return await ConvertLegacyDocumentAsync(legacyDocument, userSegment, cancellationToken).ConfigureAwait(false);
             }
             catch (JsonException)
             {
@@ -501,7 +516,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                 {
                     var entries = await JsonSerializer.DeserializeAsync(stream, DiaryAppJsonSerializerContext.Default.VideoEntryDtoArray, cancellationToken).ConfigureAwait(false)
                         ?? Array.Empty<VideoEntryDto>();
-                    return await ConvertLegacyEntriesAsync(entries, UserMediaPreferences.Default, cancellationToken).ConfigureAwait(false);
+                    return await ConvertLegacyEntriesAsync(entries, UserMediaPreferences.Default, userSegment, cancellationToken).ConfigureAwait(false);
                 }
                 catch (JsonException)
                 {
@@ -522,7 +537,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         await JsonSerializer.SerializeAsync(stream, document, DiaryAppJsonSerializerContext.Default.StoredUserEntriesDocument, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<StoredUserEntriesDocument> ConvertLegacyDocumentAsync(UserEntriesDocument? document, CancellationToken cancellationToken)
+    private async Task<StoredUserEntriesDocument> ConvertLegacyDocumentAsync(UserEntriesDocument? document, string userSegment, CancellationToken cancellationToken)
     {
         if (document is null)
         {
@@ -531,12 +546,13 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
         var preferences = NormalizePreferences(document.Preferences);
         var entries = document.Entries ?? Array.Empty<VideoEntryDto>();
-        return await ConvertLegacyEntriesAsync(entries, preferences, cancellationToken).ConfigureAwait(false);
+        return await ConvertLegacyEntriesAsync(entries, preferences, userSegment, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<StoredUserEntriesDocument> ConvertLegacyEntriesAsync(
         IReadOnlyCollection<VideoEntryDto> entries,
         UserMediaPreferences preferences,
+        string userSegment,
         CancellationToken cancellationToken)
     {
         if (entries.Count == 0)
@@ -547,26 +563,37 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var converted = new List<StoredVideoEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            await MigrateTranscriptAsync(entry, cancellationToken).ConfigureAwait(false);
-            if (entry.DescriptionEmbedding is { Length: > 0 } && !string.IsNullOrWhiteSpace(entry.VideoPath))
+            // Resolve to absolute path for file operations
+            var absoluteVideoPath = string.IsNullOrWhiteSpace(entry.VideoPath) 
+                ? entry.VideoPath 
+                : ResolveVideoPath(entry.VideoPath, userSegment);
+                
+            await MigrateTranscriptAsync(entry, absoluteVideoPath, cancellationToken).ConfigureAwait(false);
+            if (entry.DescriptionEmbedding is { Length: > 0 } && !string.IsNullOrWhiteSpace(absoluteVideoPath))
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, entry.DescriptionEmbedding, cancellationToken).ConfigureAwait(false);
+                await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, entry.DescriptionEmbedding, cancellationToken).ConfigureAwait(false);
             }
-            converted.Add(ToStored(entry));
+            
+            // Convert to relative path for storage
+            var relativeVideoPath = string.IsNullOrWhiteSpace(entry.VideoPath)
+                ? entry.VideoPath
+                : ToRelativePath(absoluteVideoPath, userSegment);
+                
+            converted.Add(ToStored(entry, relativeVideoPath));
         }
 
         return new StoredUserEntriesDocument(converted, preferences);
     }
 
-    private static async Task MigrateTranscriptAsync(VideoEntryDto entry, CancellationToken cancellationToken)
+    private static async Task MigrateTranscriptAsync(VideoEntryDto entry, string absoluteVideoPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(entry.Transcript) ||
-            string.IsNullOrWhiteSpace(entry.VideoPath))
+            string.IsNullOrWhiteSpace(absoluteVideoPath))
         {
             return;
         }
 
-        var transcriptPath = TranscriptFileStore.GetTranscriptPath(entry.VideoPath);
+        var transcriptPath = TranscriptFileStore.GetTranscriptPath(absoluteVideoPath);
         if (File.Exists(transcriptPath))
         {
             return;
@@ -575,7 +602,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         await TranscriptFileStore.WriteTranscriptByPathAsync(transcriptPath, entry.Transcript, cancellationToken);
     }
 
-    private static StoredVideoEntry ToStored(VideoEntryDto entry)
+    private static StoredVideoEntry ToStored(VideoEntryDto entry, string? relativeVideoPath = null)
     {
         var tags = entry.Tags?.ToArray() ?? Array.Empty<string>();
         return new StoredVideoEntry(
@@ -583,7 +610,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             entry.Title,
             entry.Description,
             tags,
-            entry.VideoPath,
+            relativeVideoPath ?? entry.VideoPath,
             entry.StartedAt,
             entry.CompletedAt,
             VideoEntryProcessingStatus.Completed,
@@ -592,12 +619,13 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
     private async Task<IReadOnlyCollection<VideoEntryDto>> ConvertToDtosAsync(
         IReadOnlyCollection<StoredVideoEntry> entries,
+        string userSegment,
         CancellationToken cancellationToken)
     {
         var results = new List<VideoEntryDto>(entries.Count);
         foreach (var entry in entries)
         {
-            results.Add(await ToDtoAsync(entry, cancellationToken).ConfigureAwait(false));
+            results.Add(await ToDtoAsync(entry, userSegment, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
@@ -605,29 +633,38 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
     private async Task<VideoEntryDto> ToDtoAsync(StoredVideoEntry entry, CancellationToken cancellationToken)
     {
+        var userSegment = GetCurrentUserSegment();
+        return await ToDtoAsync(entry, userSegment, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<VideoEntryDto> ToDtoAsync(StoredVideoEntry entry, string userSegment, CancellationToken cancellationToken)
+    {
+        // Resolve the stored path (relative or absolute) to an absolute path
+        var absoluteVideoPath = ResolveVideoPath(entry.VideoPath, userSegment);
+        
         float[]? embedding = null;
         if (!string.IsNullOrWhiteSpace(entry.DescriptionEmbedding))
         {
             embedding = EmbeddingSerializer.DeserializeLegacy(entry.DescriptionEmbedding);
-            if (embedding is not null && !string.IsNullOrWhiteSpace(entry.VideoPath))
+            if (embedding is not null && !string.IsNullOrWhiteSpace(absoluteVideoPath))
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
+                await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        if (embedding is null && !string.IsNullOrWhiteSpace(entry.VideoPath))
+        if (embedding is null && !string.IsNullOrWhiteSpace(absoluteVideoPath))
         {
-            embedding = await EmbeddingFileStore.ReadEmbeddingAsync(entry.VideoPath, cancellationToken).ConfigureAwait(false);
+            embedding = await EmbeddingFileStore.ReadEmbeddingAsync(absoluteVideoPath, cancellationToken).ConfigureAwait(false);
         }
 
         if (embedding is null &&
             !string.IsNullOrWhiteSpace(entry.Description) &&
-            !string.IsNullOrWhiteSpace(entry.VideoPath))
+            !string.IsNullOrWhiteSpace(absoluteVideoPath))
         {
             embedding = await GenerateEmbeddingAsync(entry.Description, cancellationToken).ConfigureAwait(false);
             if (embedding is not null)
             {
-                await EmbeddingFileStore.WriteEmbeddingAsync(entry.VideoPath, embedding, cancellationToken).ConfigureAwait(false);
+                await EmbeddingFileStore.WriteEmbeddingAsync(absoluteVideoPath, embedding, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -638,7 +675,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             null,
             null,
             entry.Tags,
-            entry.VideoPath,
+            absoluteVideoPath,
             entry.StartedAt,
             entry.CompletedAt,
             entry.ProcessingStatus,
@@ -709,6 +746,73 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             ? Path.Combine(_options.RootDirectory, DefaultUserSegment)
             : Path.Combine(_options.RootDirectory, "users", userSegment);
 
+    /// <summary>
+    /// Converts an absolute file path to a relative path (just the filename) for storage.
+    /// This ensures entries.json only contains filenames, not full paths.
+    /// </summary>
+    private string ToRelativePath(string absolutePath, string userSegment)
+    {
+        if (string.IsNullOrWhiteSpace(absolutePath))
+        {
+            return absolutePath;
+        }
+
+        var userRoot = GetUserRootDirectory(userSegment);
+        
+        // If the path is already just a filename (no directory separators), return as-is
+        if (!absolutePath.Contains(Path.DirectorySeparatorChar) && !absolutePath.Contains(Path.AltDirectorySeparatorChar))
+        {
+            return absolutePath;
+        }
+
+        // Try to make it relative to the user root directory
+        try
+        {
+            var fullPath = Path.GetFullPath(absolutePath);
+            var fullUserRoot = Path.GetFullPath(userRoot);
+            
+            // If the file is in the user root directory, return just the filename
+            if (fullPath.StartsWith(fullUserRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                fullPath.StartsWith(fullUserRoot + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return Path.GetFileName(fullPath);
+            }
+            
+            // Otherwise return the full path (for backward compatibility with absolute paths)
+            return fullPath;
+        }
+        catch
+        {
+            // If path resolution fails, return the original path
+            return absolutePath;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a stored path (which may be relative, absolute, or just a filename) to an absolute path.
+    /// Rules:
+    /// - Just a filename: resolved relative to the user directory (same as entries.json)
+    /// - Relative path: resolved relative to the user directory
+    /// - Absolute path: used as-is
+    /// </summary>
+    private string ResolveVideoPath(string storedPath, string userSegment)
+    {
+        if (string.IsNullOrWhiteSpace(storedPath))
+        {
+            return storedPath;
+        }
+
+        // Check if it's an absolute path
+        if (Path.IsPathRooted(storedPath))
+        {
+            return storedPath;
+        }
+
+        // It's a relative path or just a filename - resolve it relative to the user root directory
+        var userRoot = GetUserRootDirectory(userSegment);
+        return Path.Combine(userRoot, storedPath);
+    }
+
     private string GetCurrentUserSegment()
     {
         var httpContext = _httpContextAccessor.HttpContext;
@@ -724,7 +828,40 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
 
     string IVideoEntryStore.GetCurrentUserSegment() => GetCurrentUserSegment();
 
-    private string EnsureFinalVideoPath(StoredVideoEntry entry, string title)
+    public void InvalidateUserCache(string? userSegment = null)
+    {
+        _gate.Wait();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userSegment))
+            {
+                // Invalidate current user's cache
+                userSegment = GetCurrentUserSegment();
+            }
+
+            if (_initializedUsers.Contains(userSegment))
+            {
+                _initializedUsers.Remove(userSegment);
+                _logger.LogInformation("Cache invalidated for user segment '{UserSegment}'", userSegment);
+            }
+
+            if (_cacheByUser.ContainsKey(userSegment))
+            {
+                _cacheByUser.Remove(userSegment);
+            }
+
+            if (_preferencesByUser.ContainsKey(userSegment))
+            {
+                _preferencesByUser.Remove(userSegment);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private string EnsureFinalVideoPath(StoredVideoEntry entry, string title, string userSegment)
     {
         var currentVideoPath = entry.VideoPath;
         if (string.IsNullOrWhiteSpace(currentVideoPath))
@@ -732,44 +869,54 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             return currentVideoPath;
         }
 
-        var directory = Path.GetDirectoryName(currentVideoPath);
+        // Resolve the stored path to absolute for file operations
+        var absoluteCurrentPath = ResolveVideoPath(currentVideoPath, userSegment);
+        
+        var directory = Path.GetDirectoryName(absoluteCurrentPath);
         if (string.IsNullOrWhiteSpace(directory))
         {
             return currentVideoPath;
         }
 
-        var extension = Path.GetExtension(currentVideoPath);
+        var extension = Path.GetExtension(absoluteCurrentPath);
         if (string.IsNullOrWhiteSpace(extension))
         {
             extension = ".webm";
         }
 
-        var sanitizedTitle = SanitizeSegment(string.IsNullOrWhiteSpace(title) ? "untitled" : title);
+        // Sanitize the title for use in filename (cross-platform safe)
+        var sanitizedTitle = SanitizeFileName(string.IsNullOrWhiteSpace(title) ? "untitled" : title);
         var timestamp = entry.StartedAt.ToString(_options.FileNameFormat, CultureInfo.InvariantCulture);
-        var desiredName = $"{timestamp} - {sanitizedTitle}".Replace('"', '_');
-        var desiredVideoPath = Path.Combine(directory, desiredName + extension);
+        
+        // The timestamp format may contain characters like ':' which are invalid on Windows
+        // Sanitize the timestamp as well to ensure cross-platform compatibility
+        var sanitizedTimestamp = SanitizeFileName(timestamp);
+        
+        var desiredName = $"{sanitizedTimestamp} - {sanitizedTitle}";
+        var absoluteDesiredPath = Path.Combine(directory, desiredName + extension);
 
-        if (string.Equals(currentVideoPath, desiredVideoPath, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(absoluteCurrentPath, absoluteDesiredPath, StringComparison.OrdinalIgnoreCase))
         {
             return currentVideoPath;
         }
 
-        if (!TryMoveFile(currentVideoPath, desiredVideoPath, allowMissingSource: false))
+        if (!TryMoveFile(absoluteCurrentPath, absoluteDesiredPath, allowMissingSource: false))
         {
             return currentVideoPath;
         }
 
         TryMoveFile(
-            TranscriptFileStore.GetTranscriptPath(currentVideoPath),
-            TranscriptFileStore.GetTranscriptPath(desiredVideoPath),
+            TranscriptFileStore.GetTranscriptPath(absoluteCurrentPath),
+            TranscriptFileStore.GetTranscriptPath(absoluteDesiredPath),
             allowMissingSource: true);
 
         TryMoveFile(
-            EmbeddingFileStore.GetEmbeddingPath(currentVideoPath),
-            EmbeddingFileStore.GetEmbeddingPath(desiredVideoPath),
+            EmbeddingFileStore.GetEmbeddingPath(absoluteCurrentPath),
+            EmbeddingFileStore.GetEmbeddingPath(absoluteDesiredPath),
             allowMissingSource: true);
 
-        return desiredVideoPath;
+        // Convert the new absolute path back to relative for storage
+        return ToRelativePath(absoluteDesiredPath, userSegment);
     }
 
     private bool TryMoveFile(string? sourcePath, string? destinationPath, bool allowMissingSource)
@@ -823,6 +970,69 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = string.Join("_", value.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         return string.IsNullOrWhiteSpace(sanitized) ? DefaultUserSegment : sanitized;
+    }
+
+    /// <summary>
+    /// Sanitizes a filename to ensure cross-platform compatibility (Windows and Linux).
+    /// Removes non-ASCII characters, emoticons, and special Unicode characters.
+    /// Allows only: alphanumeric characters, spaces, hyphens, underscores, and periods.
+    /// </summary>
+    private static string SanitizeFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return "untitled";
+        }
+
+        var result = new StringBuilder(fileName.Length);
+        
+        foreach (var c in fileName)
+        {
+            // Allow only safe characters:
+            // - Letters and digits (ASCII only to avoid emoji and special Unicode)
+            // - Space, hyphen, underscore, period
+            if ((c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') ||
+                c == ' ' || c == '-' || c == '_' || c == '.')
+            {
+                result.Append(c);
+            }
+            else
+            {
+                // Replace problematic characters with underscore
+                result.Append('_');
+            }
+        }
+
+        var sanitized = result.ToString().Trim();
+        
+        // Remove multiple consecutive underscores or spaces
+        while (sanitized.Contains("__"))
+        {
+            sanitized = sanitized.Replace("__", "_");
+        }
+        while (sanitized.Contains("  "))
+        {
+            sanitized = sanitized.Replace("  ", " ");
+        }
+        
+        // Trim leading/trailing underscores and spaces
+        sanitized = sanitized.Trim(' ', '_', '.');
+        
+        // If completely empty after sanitization, use default
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "untitled";
+        }
+
+        // Limit length to avoid filesystem issues (max 200 characters for the title portion)
+        if (sanitized.Length > 200)
+        {
+            sanitized = sanitized.Substring(0, 200).TrimEnd(' ', '_', '.');
+        }
+
+        return sanitized;
     }
 
     private static void TryDeleteFile(string? path)

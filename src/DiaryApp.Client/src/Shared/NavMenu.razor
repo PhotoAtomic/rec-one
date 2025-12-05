@@ -3,6 +3,12 @@
 @using System.Reflection
 
 <nav class="nav-menu">
+    <button class="nav-hamburger" @onclick="ToggleMobileMenu" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+    </button>
+    
     @if (!_statusLoaded)
     {
         <div class="nav-links"></div>
@@ -15,13 +21,13 @@
     }
     else
     {
-        <div class="nav-links">
-            <NavLink href="/" class="nav-link" Match="NavLinkMatch.All">Record</NavLink>
-            <NavLink href="/entries" class="nav-link">Entries</NavLink>
-            <NavLink href="/outgoing" class="nav-link">Outgoing</NavLink>
-            <NavLink href="/settings" class="nav-link">Settings</NavLink>
+        <div class="nav-links @(_mobileMenuOpen ? "mobile-open" : "")">
+            <NavLink href="/" class="nav-link" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">Record</NavLink>
+            <NavLink href="/entries" class="nav-link" @onclick="CloseMobileMenu">Entries</NavLink>
+            <NavLink href="/outgoing" class="nav-link" @onclick="CloseMobileMenu">Outgoing</NavLink>
+            <NavLink href="/settings" class="nav-link" @onclick="CloseMobileMenu">Settings</NavLink>
         </div>
-        <div class="nav-menu-right">
+        <div class="nav-menu-right @(_mobileMenuOpen ? "mobile-open" : "")">
             @if (_status.AuthenticationEnabled)
             {
                 <button class="nav-link nav-disclaimer-button" @onclick="ShowDisclaimer" title="Show disclaimer">
@@ -33,12 +39,12 @@
             }
             @if (_status.IsAuthenticated)
             {
-                <div class="nav-greeting">Hi, @(_status.Name ?? "there")</div>
-                <a href="/logout" class="nav-link">Logout</a>
+                <div class="nav-greeting" title="@(_status.Name ?? "there")">Hi, @(_status.Name ?? "there")</div>
+                <a href="/logout" class="nav-link" @onclick="CloseMobileMenu">Logout</a>
             }
             else if (_statusLoaded && _status.AuthenticationEnabled)
             {
-                <a href="/login" class="nav-link">Login</a>
+                <a href="/login" class="nav-link" @onclick="CloseMobileMenu">Login</a>
             }
         </div>
     }
@@ -52,6 +58,7 @@
     private bool _statusLoaded;
     private DisclaimerModal? _disclaimerModal;
     private string _version = "";
+    private bool _mobileMenuOpen = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,5 +78,15 @@
         {
             await _disclaimerModal.Show();
         }
+    }
+
+    private void ToggleMobileMenu()
+    {
+        _mobileMenuOpen = !_mobileMenuOpen;
+    }
+
+    private void CloseMobileMenu()
+    {
+        _mobileMenuOpen = false;
     }
 }

@@ -12,6 +12,30 @@ html, body {
     padding: 1rem;
     background-color: rgba(20, 26, 39, 0.9);
     backdrop-filter: blur(4px);
+    position: relative;
+}
+
+.nav-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: #8ab4ff;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-hamburger svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: none;
+}
+
+.nav-hamburger:hover {
+    color: #cddfff;
 }
 
 .nav-links {
@@ -29,6 +53,10 @@ html, body {
 .nav-greeting {
     color: #cddfff;
     font-weight: 600;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .nav-link {
@@ -69,6 +97,67 @@ html, body {
 
 .nav-disclaimer-button:hover .disclaimer-icon {
     color: #ffa726;
+}
+
+.nav-version {
+    font-size: 0.75rem;
+    color: #546e7a;
+    align-self: center;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .nav-hamburger {
+        display: flex;
+    }
+
+    .nav-menu {
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .nav-links,
+    .nav-menu-right {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        gap: 0.5rem;
+        padding: 0.5rem 0;
+    }
+
+    .nav-links.mobile-open,
+    .nav-menu-right.mobile-open {
+        display: flex;
+    }
+
+    .nav-links {
+        order: 2;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+    }
+
+    .nav-menu-right {
+        order: 3;
+        margin-left: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+    }
+
+    .nav-version {
+        margin-left: auto;
+        order: 1;
+    }
+
+    .nav-greeting {
+        max-width: 100%;
+    }
+
+    .nav-link {
+        padding: 0.5rem 0;
+        display: block;
+    }
 }
 
 .login-required {
@@ -445,6 +534,70 @@ a.icon-button.danger:hover {
 @keyframes button-spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+/* Details/Summary Collapsible Section Styles */
+details {
+    margin: 1.5rem 0;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+details[open] {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+details summary {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: #8ab4ff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    list-style: none;
+}
+
+details summary:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #cddfff;
+}
+
+details summary::marker,
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+.details-icon {
+    width: 1.2em;
+    height: 1.2em;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+details[open] .details-icon {
+    transform: rotate(90deg);
+}
+
+.details-content {
+    padding: 1rem 1.25rem 1.5rem;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 

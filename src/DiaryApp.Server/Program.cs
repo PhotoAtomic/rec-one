@@ -725,8 +725,11 @@ if (authenticationConfigured)
         return Results.Empty;
     }).AllowAnonymous();
 
-    app.MapGet("/logout", async (HttpContext context) =>
+    app.MapGet("/logout", async (HttpContext context, IVideoEntryStore store) =>
     {
+        // Invalidate the user's cache before logging out
+        store.InvalidateUserCache();
+        
         // Only sign out from cookie authentication
         // Do not attempt to sign out from OIDC providers (Microsoft/Google)
         // as they require end session endpoints which may not be configured
