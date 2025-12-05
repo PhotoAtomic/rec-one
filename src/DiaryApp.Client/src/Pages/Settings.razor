@@ -266,7 +266,6 @@ else
     private bool _isSaving;
     private bool _isRefreshingDevices;
     private bool _deviceAccessGranted = true;
-    private bool _requestPermissionsOnFirstRender;
     private bool _preferencesLoaded;
     private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
@@ -275,35 +274,54 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            await LoadPreferencesAsync();
-        }
-        catch (Exception ex)
-        {
-            _statusMessage = $"Failed to load preferences: {ex.Message}";
-        }
-
-        try
-        {
-            await LoadHttpsCertificateInfoAsync();
-        }
-        catch (Exception ex)
-        {
-            _statusMessage ??= $"Failed to load HTTPS certificate info: {ex.Message}";
-        }
-
-        _isLoading = false;
+        _isLoading = true;
+        await base.OnInitializedAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && _preferencesLoaded)
+        if (firstRender)
         {
-            await RefreshDevices(_requestPermissionsOnFirstRender);
-            if (!_deviceAccessGranted)
+            try
             {
-                await RefreshDevices(true);
+                // Always refresh devices on first render to get the list
+                await RefreshDevices(requestPermissions: false);
+
+                // Then load preferences
+                await LoadPreferencesAsync();
+
+                // If no devices were found, it might be due to permissions.
+                // Try to request them and refresh again.
+                if (!_deviceAccessGranted)
+                {
+                    await RefreshDevices(requestPermissions: true);
+                }
+
+                // If still no access, but preferences were pointing to specific devices,
+                // we might need to ask the user to re-grant permissions.
+                var devicePrefs = await DevicePreferencesService.GetDevicePreferencesAsync();
+                if (IsUnconfigured(devicePrefs, await MediaSettingsClient.GetMediaPreferencesAsync()))
+                {
+                    await RefreshDevices(requestPermissions: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusMessage = $"Failed to initialize settings: {ex.Message}";
+            }
+            finally
+            {
+                try
+                {
+                    await LoadHttpsCertificateInfoAsync();
+                }
+                catch (Exception ex)
+                {
+                    _statusMessage ??= $"Failed to load HTTPS certificate info: {ex.Message}";
+                }
+
+                _isLoading = false;
+                StateHasChanged();
             }
         }
     }
@@ -320,7 +338,6 @@ else
         _formModel.TranscriptLanguage = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
         _formModel.FavoriteTags = string.Join(", ", serverPrefs.FavoriteTags ?? Array.Empty<string>());
 
-        _requestPermissionsOnFirstRender = IsUnconfigured(devicePrefs, serverPrefs);
         _preferencesLoaded = true;
     }
 
@@ -356,7 +373,6 @@ else
         finally
         {
             _isRefreshingDevices = false;
-            StateHasChanged();
         }
     }
 
