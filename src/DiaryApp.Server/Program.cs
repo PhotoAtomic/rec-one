@@ -184,14 +184,12 @@ if (authenticationConfigured)
 }
 else
 {
+    // When authentication is not configured, add authorization with an allow-all policy
     builder.Services.AddAuthorization(options =>
     {
-        var allowAnonymousPolicy = new AuthorizationPolicyBuilder()
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
             .RequireAssertion(_ => true)
             .Build();
-
-        options.DefaultPolicy = allowAnonymousPolicy;
-        options.FallbackPolicy = allowAnonymousPolicy;
     });
 }
 
@@ -234,7 +232,6 @@ if (authenticationConfigured)
 {
     app.UseAuthentication();
 }
-
 app.UseAuthorization();
 
 // Minimal API endpoints (AOT-friendly)

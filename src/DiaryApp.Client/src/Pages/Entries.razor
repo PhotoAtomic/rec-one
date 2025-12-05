@@ -12,6 +12,13 @@
     <button type="submit">Search</button>
 </EditForm>
 
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <div style="padding: 1rem; margin: 1rem 0; background: rgba(255, 138, 128, 0.1); border-left: 3px solid #ff8a80; color: #ff8a80;">
+        @_errorMessage
+    </div>
+}
+
 @if (_results is null)
 {
     <p>Loading entries...</p>
@@ -122,6 +129,7 @@ else
 @code {
     private string _keyword = string.Empty;
     private IReadOnlyCollection<VideoEntryDto>? _results;
+    private string? _errorMessage;
     private readonly Dictionary<Guid, string> _transcripts = new();
     private readonly HashSet<Guid> _loadingTranscripts = new();
     private readonly HashSet<Guid> _deletingEntries = new();
@@ -131,36 +139,64 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _results = await EntryClient.ListAsync();
-        UpdateProcessingEntries();
-        StartPollingIfNeeded();
+        try
+        {
+            _results = await EntryClient.ListAsync();
+            UpdateProcessingEntries();
+            StartPollingIfNeeded();
+        }
+        catch (HttpRequestException ex)
+        {
+            _errorMessage = $"Network error loading entries: {ex.Message}";
+            _results = Array.Empty<VideoEntryDto>();
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _errorMessage = $"Invalid response from server. The server may be misconfigured.";
+            _results = Array.Empty<VideoEntryDto>();
+            Console.WriteLine($"JSON Error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Unable to load entries. Please try again later.";
+            _results = Array.Empty<VideoEntryDto>();
+            Console.WriteLine($"Error loading entries: {ex}");
+        }
     }
 
     private async Task Search()
     {
-        var criteria = string.IsNullOrWhiteSpace(_keyword) ? string.Empty : _keyword.Trim();
-        if (string.IsNullOrWhiteSpace(criteria))
+        try
         {
-            _results = await EntryClient.ListAsync();
-        }
-        else
-        {
-            var searchResults = await SearchClient.SearchAsync(new SearchQuery(criteria, criteria));
-            var entries = new List<VideoEntryDto>();
-            foreach (var match in searchResults)
+            _errorMessage = null;
+            var criteria = string.IsNullOrWhiteSpace(_keyword) ? string.Empty : _keyword.Trim();
+            if (string.IsNullOrWhiteSpace(criteria))
             {
-                var entry = await EntryClient.GetAsync(match.Id);
-                if (entry is not null)
+                _results = await EntryClient.ListAsync();
+            }
+            else
+            {
+                var searchResults = await SearchClient.SearchAsync(new SearchQuery(criteria, criteria));
+                var entries = new List<VideoEntryDto>();
+                foreach (var match in searchResults)
                 {
-                    entries.Add(entry);
+                    var entry = await EntryClient.GetAsync(match.Id);
+                    if (entry is not null)
+                    {
+                        entries.Add(entry);
+                    }
                 }
+
+                _results = entries;
             }
 
-            _results = entries;
+            UpdateProcessingEntries();
+            StartPollingIfNeeded();
         }
-
-        UpdateProcessingEntries();
-        StartPollingIfNeeded();
+        catch (Exception)
+        {
+            _errorMessage = "Search failed. Please try again later.";
+        }
     }
 
     private async Task LoadTranscript(Guid id)
