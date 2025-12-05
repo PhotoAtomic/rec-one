@@ -5,6 +5,7 @@ using DiaryApp.Server;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
 using DiaryApp.Server.Storage;
+using DiaryApp.Shared;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -159,7 +161,48 @@ if (authenticationConfigured)
             options.Scope.Add("profile");
             options.Scope.Add("email");
             options.TokenValidationParameters.NameClaimType = "preferred_username";
+            options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role; // Map 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role' to the RoleClaimType
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+            options.Events = new OpenIdConnectEvents
+            {
+                OnTicketReceived = context =>
+                {
+                    var identity = (ClaimsIdentity?)context.Principal?.Identity;
+                    if (identity is not null)
+                    {
+                        // Use UPN for Microsoft accounts, fallback to email
+                        var userId = context.Principal?.FindFirst(ClaimTypes.Upn)?.Value
+                                     ?? context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+
+                        if (!string.IsNullOrWhiteSpace(userId))
+                        {
+                            identity.AddClaim(new Claim(DiaryAppClaimTypes.UserId, userId));
+                        }
+
+                        // Log all claims for detailed debugging
+                        Console.WriteLine($"--- All Claims for user '{userId}' ---");
+                        foreach (var claim in context.Principal.Claims)
+                        {
+                            Console.WriteLine($"  - Claim Type: {claim.Type}, Value: {claim.Value}");
+                        }
+                        Console.WriteLine("------------------------------------");
+
+                        // Log user roles for debugging
+                        var roles = context.Principal?.FindAll(identity.RoleClaimType).Select(c => c.Value).ToList();
+                        Console.WriteLine($"User '{userId}' authenticated.");
+                        if (roles is { Count: > 0 })
+                        {
+                            Console.WriteLine($"  - Roles: {string.Join(", ", roles)}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("  - No roles found.");
+                        }
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
     }
 
@@ -177,6 +220,24 @@ if (authenticationConfigured)
             options.Scope.Add("email");
             options.TokenValidationParameters.NameClaimType = "name";
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+            options.Events = new OpenIdConnectEvents
+            {
+                OnTicketReceived = context =>
+                {
+                    var identity = (ClaimsIdentity?)context.Principal?.Identity;
+                    if (identity is not null)
+                    {
+                        // Google always provides an email claim
+                        var userId = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+                        if (!string.IsNullOrWhiteSpace(userId))
+                        {
+                            identity.AddClaim(new Claim(DiaryAppClaimTypes.UserId, userId));
+                        }
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
     }
 

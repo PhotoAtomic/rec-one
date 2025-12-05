@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
+using DiaryApp.Shared;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -237,6 +239,17 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var userSegment = GetCurrentUserSegment();
+        var httpContext = _httpContextAccessor.HttpContext;
+        var user = httpContext?.User;
+        var isAuthenticated = user?.Identity?.IsAuthenticated == true;
+
+        // Determine if a deep delete should be performed.
+        // A deep delete is a physical delete. A non-deep (soft) delete is a logical delete.
+        // Deep delete is allowed if:
+        // 1. Authentication is not configured for the application.
+        // 2. The authenticated user has the "CanDeepDelete" role.
+        var allowDeepDelete = !isAuthenticated || user.IsInRole(DiaryAppRoles.CanDeepDelete);
+
         await EnsureInitializedAsync(userSegment, cancellationToken);
 
         StoredVideoEntry? removed = null;
@@ -258,11 +271,33 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
             _gate.Release();
         }
 
-        if (!string.IsNullOrWhiteSpace(removed?.VideoPath))
+        if (removed is null || string.IsNullOrWhiteSpace(removed.VideoPath))
         {
+            return true; // Entry was removed from index, but there's no file path to process.
+        }
+
+        if (allowDeepDelete)
+        {
+            // Hard delete: physically remove all associated files.
+            _logger.LogWarning("Performing deep delete for entry {EntryId} by user {UserIdentifier}", id, userSegment);
             TryDeleteFile(removed.VideoPath);
             TryDeleteFile(TranscriptFileStore.GetTranscriptPath(removed.VideoPath));
             EmbeddingFileStore.DeleteEmbedding(removed.VideoPath);
+        }
+        else
+        {
+            // Soft delete: remove from index but preserve files and create a .DELETED marker.
+            _logger.LogInformation("Performing soft delete for entry {EntryId} by user {UserIdentifier}", id, userSegment);
+            var deletedMarkerPath = Path.ChangeExtension(removed.VideoPath, ".DELETED");
+            try
+            {
+                var json = JsonSerializer.Serialize(removed, DiaryAppJsonSerializerContext.Default.StoredVideoEntry);
+                await File.WriteAllTextAsync(deletedMarkerPath, json, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create .DELETED marker file for soft-deleted entry {EntryId}", id);
+            }
         }
 
         return true;
@@ -679,8 +714,9 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext?.User?.Identity?.IsAuthenticated == true)
         {
-            var name = httpContext.User.Identity?.Name;
-            return SanitizeSegment(string.IsNullOrWhiteSpace(name) ? "user" : name);
+            // Use the custom UserId claim, which is guaranteed to be populated by the authentication logic.
+            var identifier = httpContext.User.FindFirst(DiaryAppClaimTypes.UserId)?.Value;
+            return SanitizeSegment(string.IsNullOrWhiteSpace(identifier) ? "user" : identifier);
         }
 
         return DefaultUserSegment;
