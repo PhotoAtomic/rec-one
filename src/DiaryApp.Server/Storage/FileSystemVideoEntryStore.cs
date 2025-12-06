@@ -256,7 +256,7 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
         // Deep delete is allowed if:
         // 1. Authentication is not configured for the application.
         // 2. The authenticated user has the "CanDeepDelete" role.
-        var allowDeepDelete = !isAuthenticated || user.IsInRole(DiaryAppRoles.CanDeepDelete);
+        var allowDeepDelete = !isAuthenticated || (user?.IsInRole(DiaryAppRoles.CanDeepDelete) ?? false);
 
         await EnsureInitializedAsync(userSegment, cancellationToken);
 

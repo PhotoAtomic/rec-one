@@ -182,7 +182,7 @@ if (authenticationConfigured)
 
                         // Log all claims for detailed debugging
                         Console.WriteLine($"--- All Claims for user '{userId}' ---");
-                        foreach (var claim in context.Principal.Claims)
+                        foreach (var claim in context.Principal?.Claims ?? [])
                         {
                             Console.WriteLine($"  - Claim Type: {claim.Type}, Value: {claim.Value}");
                         }
@@ -673,13 +673,13 @@ app.MapGet("/authentication/providers", () =>
 {
     var providers = new List<AuthenticationProviderInfo>();
 
-    if (authOptions.Microsoft.IsConfigured())
+    if (authOptions?.Microsoft?.IsConfigured() == true)
     {
         var logo = microsoftSection["LogoPath"] ?? "/images/provider/microsoft.png";
         providers.Add(new AuthenticationProviderInfo("Microsoft", "Microsoft", "/login/microsoft", logo));
     }
 
-    if (authOptions.Google.IsConfigured())
+    if (authOptions?.Google?.IsConfigured() == true)
     {
         var logo = googleSection["LogoPath"] ?? "/images/provider/google.png";
         providers.Add(new AuthenticationProviderInfo("Google", "Google", "/login/google", logo));
@@ -699,7 +699,7 @@ if (authenticationConfigured)
     // Provider-specific login endpoints
     app.MapGet("/login/microsoft", async (HttpContext context) =>
     {
-        if (!authOptions.Microsoft.IsConfigured())
+        if (authOptions?.Microsoft?.IsConfigured() != true)
         {
             return Results.NotFound();
         }
@@ -714,7 +714,7 @@ if (authenticationConfigured)
 
     app.MapGet("/login/google", async (HttpContext context) =>
     {
-        if (!authOptions.Google.IsConfigured())
+        if (authOptions?.Google?.IsConfigured() != true)
         {
             return Results.NotFound();
         }

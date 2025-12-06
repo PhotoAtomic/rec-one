@@ -266,7 +266,6 @@ else
     private bool _isSaving;
     private bool _isRefreshingDevices;
     private bool _deviceAccessGranted = true;
-    private bool _preferencesLoaded;
     private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
     private List<MediaDeviceInfo> _microphones = new();
@@ -337,8 +336,6 @@ else
         var serverPrefs = await MediaSettingsClient.GetMediaPreferencesAsync();
         _formModel.TranscriptLanguage = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
         _formModel.FavoriteTags = string.Join(", ", serverPrefs.FavoriteTags ?? Array.Empty<string>());
-
-        _preferencesLoaded = true;
     }
 
     private async Task LoadHttpsCertificateInfoAsync()
