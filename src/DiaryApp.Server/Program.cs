@@ -675,12 +675,14 @@ app.MapGet("/authentication/providers", () =>
 
     if (authOptions.Microsoft.IsConfigured())
     {
-        providers.Add(new AuthenticationProviderInfo("Microsoft", "Microsoft", "/login/microsoft"));
+        var logo = microsoftSection["LogoPath"] ?? "/images/provider/microsoft.png";
+        providers.Add(new AuthenticationProviderInfo("Microsoft", "Microsoft", "/login/microsoft", logo));
     }
 
     if (authOptions.Google.IsConfigured())
     {
-        providers.Add(new AuthenticationProviderInfo("Google", "Google", "/login/google"));
+        var logo = googleSection["LogoPath"] ?? "/images/provider/google.png";
+        providers.Add(new AuthenticationProviderInfo("Google", "Google", "/login/google", logo));
     }
 
     var response = new AvailableProvidersDto(authenticationConfigured, providers);

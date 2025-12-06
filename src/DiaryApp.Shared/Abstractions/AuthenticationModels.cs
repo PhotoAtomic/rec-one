@@ -7,6 +7,7 @@ public sealed record OidcProviderConfiguration
     public string? ClientSecret { get; init; }
     public string? CallbackPath { get; init; }
     public string? ResponseType { get; init; }
+    public string? LogoPath { get; init; }
 
     public bool IsConfigured()
     {
@@ -31,7 +32,8 @@ public sealed record OidcAuthenticationOptions
 public sealed record AuthenticationProviderInfo(
     string Name,
     string DisplayName,
-    string LoginPath);
+    string LoginPath,
+    string? LogoPath = null);
 
 public sealed record AvailableProvidersDto(
     bool AuthenticationEnabled,

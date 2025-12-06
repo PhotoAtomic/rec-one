@@ -1,0 +1,130 @@
+@using Microsoft.AspNetCore.Components
+
+<style>
+    :root {
+        --vd-primary: #3b82f6;
+        --vd-accent: #22c55e;
+        --vd-bg: #0b1020;
+        --vd-card: rgba(255,255,255,0.06);
+        --vd-text: #e5e7eb;
+    }
+    .lr-container { max-width: 1120px; margin: 0 auto; padding: 0 1rem 2rem; }
+    .lr-topbar { position: sticky; top: 0; z-index: 10; margin: -1rem -1rem 1rem; padding: .75rem 1rem; backdrop-filter: saturate(180%) blur(8px); background: linear-gradient(180deg, rgba(0,0,0,.50), rgba(0,0,0,.30)); border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: space-between; }
+    .lr-brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; letter-spacing: .3px; color: var(--vd-text); }
+    .lr-brand svg { width: 28px; height: 28px; }
+    .lr-login-link { color: var(--vd-text); text-decoration: none; padding: .5rem .9rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); transition: all 180ms ease; }
+    .lr-login-link:hover { background: var(--vd-card); border-color: rgba(255,255,255,.35); }
+    .lr-hero { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem; align-items: center; margin-top: 1rem; }
+    .lr-hero h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.1; margin: 0 0 .75rem 0; }
+    .lr-hero p.lead { font-size: clamp(1rem, 1.6vw, 1.25rem); opacity: .9; }
+    .lr-preview { border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.08); }
+    .lr-preview img, .lr-preview svg { width: 100%; height: auto; display: block; }
+    .lr-cta { margin-top: 1.5rem; display: flex; gap: 1rem; }
+    .lr-btn-primary { text-decoration: none; padding: .8rem 1.2rem; border-radius: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,.18); background: var(--vd-primary); color: white; box-shadow: 0 10px 18px rgba(59,130,246,.35); }
+    .lr-features { margin-top: 2rem; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+    .lr-feature { background: var(--vd-card); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 1rem; display: grid; grid-template-columns: auto 1fr; gap: .75rem 1rem; align-items: start; }
+    .lr-feature-icon { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, var(--vd-primary), #9333ea); color: white; box-shadow: 0 8px 18px rgba(59,130,246,.35); }
+    .lr-feature h3 { margin: 0; font-size: 1rem; }
+    .lr-feature p { margin: 0; font-size: .95rem; opacity: .9; }
+    @@media (max-width: 900px) { .lr-hero { grid-template-columns: 1fr; } .lr-features { grid-template-columns: repeat(2, 1fr); } }
+    @@media (max-width: 560px) { .lr-features { grid-template-columns: 1fr; } }
+    .icon-svg { width: 24px; height: 24px; }
+</style>
+
+<div class="lr-container">
+
+    <section class="lr-hero" aria-label="Product overview">
+        <div>
+            <h1>Record your day. AI builds your diary.</h1>
+            <p class="lead">Record videos with one click and let AI automatically generate transcription, summary, title and tags. Edit everything anytime and rediscover your memories with semantic search by meaning.</p>
+            <div class="lr-cta">
+                <a class="lr-btn-primary" href="/login">Get started</a>
+            </div>
+        </div>
+        <div class="lr-preview" aria-hidden="true">
+            <img src="images/stock/diary-hero.svg" alt="Video diary hero" />
+        </div>
+    </section>
+
+    <div class="lr-features" aria-label="Features">
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Camera icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="6" width="14" height="12" rx="2" ry="2"></rect>
+                    <circle cx="10" cy="12" r="3"></circle>
+                    <polygon points="17,9 21,7 21,17 17,15" fill="currentColor"></polygon>
+                </svg>
+            </div>
+            <div>
+                <h3>Video Recording</h3>
+                <p>Capture moments quickly and easily right in the browser.</p>
+            </div>
+        </article>
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Document/edit icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 3h9l3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"></path>
+                    <path d="M9 12h6M9 9h3"></path>
+                </svg>
+            </div>
+            <div>
+                <h3>Transcription & Summary</h3>
+                <p>AI automatically transcribes and summarizes your video content.</p>
+            </div>
+        </article>
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Tag icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 12l-8 8-9-9 8-8h6l3 3v6z"></path>
+                    <circle cx="15" cy="9" r="2" fill="currentColor"></circle>
+                </svg>
+            </div>
+            <div>
+                <h3>Auto Title & Tags</h3>
+                <p>Generates relevant titles and smart tags to organize entries.</p>
+            </div>
+        </article>
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Pencil/edit icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"></path>
+                    <path d="M14.06 6.19l3.75 3.75"></path>
+                </svg>
+            </div>
+            <div>
+                <h3>Full Editing</h3>
+                <p>Review and edit title, description, tags and transcription anytime.</p>
+            </div>
+        </article>
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Search icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+            <div>
+                <h3>Semantic Search</h3>
+                <p>Find entries by meaning thanks to embeddings and semantic search.</p>
+            </div>
+        </article>
+        <article class="lr-feature">
+            <div class="lr-feature-icon" aria-hidden="true">
+                <!-- Cloud icon -->
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 17a4 4 0 0 0-3-7 6 6 0 0 0-11 3"></path>
+                    <path d="M5 17h15a3 3 0 0 0 0-6"></path>
+                </svg>
+            </div>
+            <div>
+                <h3>Offline-ready PWA</h3>
+                <p>Service worker and caching for fast startup and resilience.</p>
+            </div>
+        </article>
+    </div>
+</div>

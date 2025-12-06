@@ -630,22 +630,15 @@ details[open] .details-icon {
     transform: translateY(-2px);
 }
 
-.provider-button.microsoft {
-    background: rgba(47, 47, 47, 0.8);
-    border-color: rgba(138, 180, 255, 0.3);
-}
-
-.provider-button.microsoft:hover {
-    background: rgba(47, 47, 47, 1);
-    border-color: rgba(138, 180, 255, 0.5);
-}
-
+/* Normalize provider-specific buttons to share the same neutral style */
+.provider-button.microsoft,
 .provider-button.google {
-    background: rgba(66, 133, 244, 0.8);
-    border-color: rgba(138, 180, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
+.provider-button.microsoft:hover,
 .provider-button.google:hover {
-    background: rgba(66, 133, 244, 1);
-    border-color: rgba(138, 180, 255, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
 }

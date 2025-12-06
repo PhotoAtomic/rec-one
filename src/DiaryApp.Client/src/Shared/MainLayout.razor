@@ -17,11 +17,7 @@
             }
             else if (_status.AuthenticationEnabled && !_status.IsAuthenticated && !IsLoginPage())
             {
-                <section class="login-required">
-                    <h1>Authentication Required</h1>
-                    <p>You need to sign in to use this application.</p>
-                    <p><a href="/login" class="nav-link" style="font-size: 1.2rem; font-weight: 600;">Sign In</a></p>
-                </section>
+                <LoginRequired />
             }
             else
             {

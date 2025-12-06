@@ -23,8 +23,12 @@
                 @foreach (var provider in _providers)
                 {
                     <a href="@provider.LoginPath" 
-                       class="provider-button @provider.Name.ToLowerInvariant()">
-                        Sign in with @provider.DisplayName
+                       class="provider-button @provider.Name.ToLowerInvariant()" style="display:flex;align-items:center;gap:.6rem;">
+                        @if (!string.IsNullOrWhiteSpace(provider.LogoPath))
+                        {
+                            <img src="@provider.LogoPath" alt="@provider.DisplayName logo" style="width:22px;height:22px;object-fit:contain;display:block;" />
+                        }
+                        <span>Sign in with @provider.DisplayName</span>
                     </a>
                 }
             </div>

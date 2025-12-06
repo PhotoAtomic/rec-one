@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -18,5 +18,9 @@
   <ItemGroup>
     <ProjectReference Include="..\DiaryApp.Client\DiaryApp.Client.csproj" />
     <ProjectReference Include="..\DiaryApp.Shared\DiaryApp.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Pages\" />
   </ItemGroup>
 </Project>
