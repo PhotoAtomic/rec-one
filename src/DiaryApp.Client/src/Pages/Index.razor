@@ -25,18 +25,42 @@
             </div>
         </div>
         <div class="capture-actions">
-            <button @onclick="StartRecording" disabled="@_isRecording">Start Recording</button>
-            <button class="secondary" @onclick="StopRecording" disabled="@(!_isRecording)">Stop</button>
-            <button type="button"
-                    class="secondary"
-                    @onclick="ToggleCaptureMode">
-                @(_captureScreen ? "Use Webcam" : "Capture Screen")
-            </button>
+            @if (!_isRecording && !_hasRecording)
+            {
+                <!-- Initial state: only Start button -->
+                <button @onclick="StartRecording">Start Recording</button>
+            }
+            else if (_isRecording)
+            {
+                <!-- Recording state: Switch input + Stop -->
+                <button type="button"
+                        class="secondary"
+                        @onclick="ToggleCaptureMode">
+                    @(_captureScreen ? "Use Webcam" : "Capture Screen")
+                </button>
+                <button @onclick="StopRecording">Stop</button>
+            }
+            else if (_hasRecording)
+            {
+                <!-- Post-recording state: Cancel + Save -->
+                <button type="button" class="secondary" @onclick="CancelRecording">Cancel</button>
+                <button type="submit" form="save-form" disabled="@_isSaving" class="with-spinner" @ref="_saveButton">
+                    @if (_isSaving)
+                    {
+                        <span class="button-spinner" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Save</span>
+                    }
+                </button>
+            }
         </div>
     </div>
 </section>
 
-<EditForm Model="this" OnValidSubmit="SaveEntry">
+<EditForm Model="this" OnValidSubmit="SaveEntry" id="save-form">
     <details @ref="_formContainer" open="@_detailsExpanded">
         <summary @onclick="ToggleDetails" @onclick:preventDefault>
             <svg class="details-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -46,47 +70,15 @@
         </summary>
         <div class="details-content">
             <input @bind="_title" placeholder="Entry title" @ref="_titleInput" />
-            <textarea @bind="_description" placeholder="Description" rows="3"></textarea>
             <InputText @bind-Value="_tagInput" placeholder="Tags (comma separated)" />
+            <textarea @bind="_description" placeholder="Description" rows="5"></textarea>
         </div>
     </details>
-
-    <button type="submit" disabled="@(!_hasRecording || _isSaving)" class="with-spinner">
-        @if (_isSaving)
-        {
-            <span class="button-spinner" aria-hidden="true"></span>
-            <span>Saving entry...</span>
-        }
-        else
-        {
-            <span>Save Entry</span>
-        }
-    </button>
 </EditForm>
 
 @if (!string.IsNullOrWhiteSpace(_statusMessage))
 {
     <p>@_statusMessage</p>
-}
-
-@if (_lastCreated is not null)
-{
-    <section @ref="_lastEntryRef">
-        <h2>Last entry</h2>
-        <p><strong>@_lastCreated.Title</strong></p>
-        @if (!string.IsNullOrWhiteSpace(_lastCreated.Description))
-        {
-            <p>@_lastCreated.Description</p>
-        }
-        @if (_lastCreated.Summary is not null)
-        {
-            <p>@_lastCreated.Summary</p>
-        }
-        @if (_lastCreated.Tags.Any())
-        {
-            <p>Tags: @string.Join(", ", _lastCreated.Tags)</p>
-        }
-    </section>
 }
 
 @code {
@@ -99,14 +91,12 @@
     private string _description = string.Empty;
     private string _tagInput = string.Empty;
     private string? _statusMessage;
-    private VideoEntryDto? _lastCreated;
     private bool _captureScreen;
     private ElementReference _formContainer;
     private ElementReference _titleInput;
-    private ElementReference _lastEntryRef;
+    private ElementReference _saveButton;
     private IJSObjectReference? _uiModule;
     private IJSObjectReference? _permissionsModule;
-    private bool _pendingScrollToLastEntry;
     private bool _detailsExpanded = false;
 
     private void ToggleDetails()
@@ -209,12 +199,22 @@
         _isRecording = false;
         _hasRecording = true;
         
-        // Expand details section after stopping recording
-        _detailsExpanded = true;
-        StateHasChanged();
-        
-        await ScrollToFormAsync();
-        await FocusTitleAsync();
+        await ScrollToSaveButtonAsync();
+        await FocusSaveButtonAsync();
+    }
+
+    private void CancelRecording()
+    {
+        // Reset all state to initial
+        _hasRecording = false;
+        _isRecording = false;
+        _isSaving = false;
+        _title = string.Empty;
+        _description = string.Empty;
+        _tagInput = string.Empty;
+        _statusMessage = null;
+        _captureScreen = false;
+        _detailsExpanded = false;
     }
 
     private async Task SaveEntry()
@@ -247,16 +247,17 @@
                 InvokeAsync(StateHasChanged);
             });
 
-            _lastCreated = await UploadService.UploadAsync(
+            await UploadService.UploadAsync(
                 recordingBytes,
                 fileName,
                 _title,
                 _description,
                 _tagInput,
                 progress);
-            _pendingScrollToLastEntry = true;
-            _statusMessage = "Entry saved.";
             _hasRecording = false;
+            
+            // Redirect to entries page after successful save
+            Navigation.NavigateTo("/entries");
         }
         catch (Exception ex)
         {
@@ -301,46 +302,29 @@
         return memory.Length == 0 ? null : memory.ToArray();
     }
 
-    private async Task ScrollToFormAsync()
+    private async Task ScrollToSaveButtonAsync()
     {
-        if (_formContainer.Context is null)
+        // Small delay to ensure the button is rendered
+        await Task.Delay(50);
+        
+        if (_saveButton.Context is null)
         {
             return;
         }
 
         await EnsureUiModuleAsync();
-        await _uiModule!.InvokeVoidAsync("scrollIntoView", _formContainer);
+        await _uiModule!.InvokeVoidAsync("scrollIntoView", _saveButton);
     }
 
-    private async Task ScrollToLastEntryAsync()
+    private async Task FocusSaveButtonAsync()
     {
-        if (_lastEntryRef.Context is null)
+        if (_saveButton.Context is null)
         {
             return;
         }
 
         await EnsureUiModuleAsync();
-        await _uiModule!.InvokeVoidAsync("scrollIntoView", _lastEntryRef);
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_pendingScrollToLastEntry)
-        {
-            _pendingScrollToLastEntry = false;
-            await ScrollToLastEntryAsync();
-        }
-    }
-
-    private async Task FocusTitleAsync()
-    {
-        if (_titleInput.Context is null)
-        {
-            return;
-        }
-
-        await EnsureUiModuleAsync();
-        await _uiModule!.InvokeVoidAsync("focusElement", _titleInput);
+        await _uiModule!.InvokeVoidAsync("focusElement", _saveButton);
     }
 
     private async Task EnsureUiModuleAsync()

@@ -17,13 +17,12 @@
     }
     else
     {
-        <button type="button" class="preview-button" @onclick="PlayVideo">
+        <button type="button" class="preview-button" @onclick="PlayVideo" title="Play recording">
             <img @ref="_previewImage"
                  class="preview-button__image"
                  src="@_previewImageSource"
                  alt="@($"{Entry.Title} preview")"
                  loading="lazy" />
-            <span class="preview-button__label">Play recording</span>
         </button>
     }
 </div>

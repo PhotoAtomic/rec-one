@@ -4,29 +4,29 @@
 
 <PageTitle>Login - Video Diary</PageTitle>
 
-<div style="display: flex; align-items: center; justify-content: center; min-height: 80vh; padding: 2rem;">
-    <div style="max-width: 500px; width: 100%;">
-        <h1 style="text-align: center; margin-bottom: 0.5rem;">Welcome to Video Diary</h1>
-        <p style="text-align: center; color: #8ab4ff; margin-bottom: 2rem;">Choose your login provider</p>
+<div class="login-page">
+    <div class="login-container">
+        <h1 class="login-title">Welcome to Video Diary</h1>
+        <p class="login-subtitle">Choose your login provider</p>
         
         @if (_isLoading)
         {
-            <p style="text-align: center;">Loading...</p>
+            <p class="login-loading">Loading...</p>
         }
         else if (_providers.Count == 0)
         {
-            <p style="text-align: center; color: #ff8a80;">No authentication providers configured.</p>
+            <p class="login-error">No authentication providers configured.</p>
         }
         else
         {
-            <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
+            <div class="login-providers">
                 @foreach (var provider in _providers)
                 {
                     <a href="@provider.LoginPath" 
-                       class="provider-button @provider.Name.ToLowerInvariant()" style="display:flex;align-items:center;gap:.6rem;">
+                       class="provider-button @provider.Name.ToLowerInvariant()">
                         @if (!string.IsNullOrWhiteSpace(provider.LogoPath))
                         {
-                            <img src="@provider.LogoPath" alt="@provider.DisplayName logo" style="width:22px;height:22px;object-fit:contain;display:block;" />
+                            <img src="@provider.LogoPath" alt="@provider.DisplayName logo" class="provider-logo" />
                         }
                         <span>Sign in with @provider.DisplayName</span>
                     </a>
@@ -35,12 +35,12 @@
 
             @if (!string.IsNullOrWhiteSpace(_disclaimerText))
             {
-                <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(255, 138, 128, 0.1); border-left: 3px solid #ff8a80; border-radius: 8px;">
-                    <h3 style="margin: 0 0 1rem 0; color: #ff8a80; font-size: 1.1rem;">Important Notice</h3>
-                    <div style="color: #cddfff; font-size: 0.9rem; line-height: 1.6;">
+                <div class="login-disclaimer">
+                    <h3>Important Notice</h3>
+                    <div class="login-disclaimer__content">
                         @foreach (var line in _disclaimerText.Split('\n'))
                         {
-                            <p style="margin: 0 0 0.75rem 0;">@line</p>
+                            <p>@line</p>
                         }
                     </div>
                 </div>

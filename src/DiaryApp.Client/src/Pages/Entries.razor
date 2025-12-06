@@ -14,7 +14,7 @@
 
 @if (!string.IsNullOrWhiteSpace(_errorMessage))
 {
-    <div style="padding: 1rem; margin: 1rem 0; background: rgba(255, 138, 128, 0.1); border-left: 3px solid #ff8a80; color: #ff8a80;">
+    <div class="error-banner">
         @_errorMessage
     </div>
 }
@@ -34,7 +34,7 @@ else
         {
             <li class="entry-card">
                 <div class="entry-card__header">
-                    <div>
+                    <div class="entry-card__info">
                         <h3>@entry.Title</h3>
                         <p class="entry-card__timestamp">@entry.StartedAt.ToLocalTime().ToString("f")</p>
                         @if (entry.ProcessingStatus == VideoEntryProcessingStatus.InProgress)
@@ -45,8 +45,12 @@ else
                             </p>
                         }
                     </div>
-                    <div class="entry-card__header-actions">
-                        <div class="entry-card__header-buttons">
+                </div>
+
+                <div class="entry-card__body">
+                    <div class="entry-card__media">
+                        <VideoPreview Entry="entry" PreviewSecond="5" />
+                        <div class="entry-card__actions">
                             <button type="button"
                                     class="icon-button"
                                     title="Edit entry"
@@ -74,46 +78,50 @@ else
                                 }
                             </button>
                         </div>
-                        <VideoPreview Entry="entry" PreviewSecond="5" />
+                    </div>
+                    <div class="entry-card__content">
+                        @if (!string.IsNullOrWhiteSpace(entry.Description))
+                        {
+                            <p class="entry-card__description">@entry.Description</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(entry.Summary))
+                        {
+                            <p class="entry-card__summary">@entry.Summary</p>
+                        }
+                        <div class="entry-card__tags">
+                            @if (entry.Tags.Any())
+                            {
+                                <div class="tag-list">
+                                    @foreach (var tag in entry.Tags.OrderBy(t => t, System.StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        <span class="tag-pill">@tag</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="tag-placeholder">No tags yet</span>
+                            }
+                        </div>
                     </div>
                 </div>
 
-                @if (!string.IsNullOrWhiteSpace(entry.Description))
-                {
-                    <p>@entry.Description</p>
-                }
-                @if (!string.IsNullOrWhiteSpace(entry.Summary))
-                {
-                    <p><em>@entry.Summary</em></p>
-                }
-                <div class="entry-card__tags">
-                    @if (entry.Tags.Any())
-                    {
-                        <div class="tag-list">
-                            @foreach (var tag in entry.Tags.OrderBy(t => t, System.StringComparer.OrdinalIgnoreCase))
-                            {
-                                <span class="tag-pill">@tag</span>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <span class="tag-placeholder">No tags yet</span>
-                    }
+                <div class="entry-card__footer">
+                    <button class="with-spinner secondary"
+                            @onclick="() => LoadTranscript(entry.Id)"
+                            disabled="@IsTranscriptLoading(entry.Id)">
+                        @if (IsTranscriptLoading(entry.Id))
+                        {
+                            <span class="button-spinner" aria-hidden="true"></span>
+                            <span>Loading transcript...</span>
+                        }
+                        else
+                        {
+                            <span>Show transcript</span>
+                        }
+                    </button>
                 </div>
-                <button class="with-spinner"
-                        @onclick="() => LoadTranscript(entry.Id)"
-                        disabled="@IsTranscriptLoading(entry.Id)">
-                    @if (IsTranscriptLoading(entry.Id))
-                    {
-                        <span class="button-spinner" aria-hidden="true"></span>
-                        <span>Loading transcript...</span>
-                    }
-                    else
-                    {
-                        <span>Show transcript</span>
-                    }
-                </button>
+
                 @if (_transcripts.TryGetValue(entry.Id, out var transcript))
                 {
                     <details open>
