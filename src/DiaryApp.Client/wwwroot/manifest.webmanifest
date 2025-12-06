@@ -1,9 +1,16 @@
 {
-  "name": "Video Diary",
-  "short_name": "Diary",
+  "name": "Rec-One",
+  "short_name": "Rec-One",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#10131a",
   "theme_color": "#1e88e5",
-  "icons": []
+  "icons": [
+    {
+      "src": "/images/diary-favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }

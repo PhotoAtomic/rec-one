@@ -1,5 +1,6 @@
 @using DiaryApp.Shared.Abstractions
 @inject DiaryApp.Client.Services.AuthenticationStatusService AuthStatusService
+@inject Microsoft.JSInterop.IJSRuntime JS
 @using System.Reflection
 
 <nav class="nav-menu">
@@ -26,6 +27,10 @@
             <NavLink href="/entries" class="nav-link" @onclick="CloseMobileMenu">Entries</NavLink>
             <NavLink href="/outgoing" class="nav-link" @onclick="CloseMobileMenu">Outgoing</NavLink>
             <NavLink href="/settings" class="nav-link" @onclick="CloseMobileMenu">Settings</NavLink>
+            @if (_pwaInstallAvailable)
+            {
+                <a href="#" class="nav-link" @onclick="TriggerInstall">Install</a>
+            }
         </div>
         <div class="nav-menu-right @(_mobileMenuOpen ? "mobile-open" : "")">
             @if (_status.AuthenticationEnabled)
@@ -60,6 +65,10 @@
     private string _version = "";
     private bool _mobileMenuOpen = false;
 
+    // PWA install handling
+    private bool _pwaInstallAvailable = false;
+    private Microsoft.JSInterop.IJSObjectReference? _pwaModule;
+
     protected override async Task OnInitializedAsync()
     {
         _status = await AuthStatusService.GetStatusAsync();
@@ -70,6 +79,30 @@
             ? $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}"
             : "1.0.0.0";
         _version = versionString;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _pwaModule = await JS.InvokeAsync<Microsoft.JSInterop.IJSObjectReference>("import", new object[] { "./js/pwaInstall.js" });
+            _pwaInstallAvailable = await _pwaModule.InvokeAsync<bool>("isInstallAvailable", Array.Empty<object>());
+            StateHasChanged();
+        }
+    }
+
+    private async Task TriggerInstall()
+    {
+        if (_pwaModule is null)
+        {
+            return;
+        }
+        var installed = await _pwaModule.InvokeAsync<bool>("triggerInstall", Array.Empty<object>());
+        if (installed)
+        {
+            _pwaInstallAvailable = false; // hide link after install
+            StateHasChanged();
+        }
     }
 
     private async Task ShowDisclaimer()

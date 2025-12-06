@@ -19,6 +19,13 @@
         <a href="#" class="reload">Reload</a>
         <a class="dismiss">�</a>
     </div>
+    <script>
+        // Capture beforeinstallprompt as early as possible so UI can expose Install
+        window.addEventListener('beforeinstallprompt', function (e) {
+            e.preventDefault();
+            window.__pwaDeferredPrompt = e;
+        });
+    </script>
     <script src="_framework/blazor.webassembly.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
