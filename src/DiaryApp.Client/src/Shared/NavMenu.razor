@@ -4,11 +4,14 @@
 @using System.Reflection
 
 <nav class="nav-menu">
-    <button class="nav-hamburger" @onclick="ToggleMobileMenu" aria-label="Toggle menu">
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-    </button>
+    @if (_statusLoaded && (!_status.AuthenticationEnabled || _status.IsAuthenticated))
+    {
+        <button class="nav-hamburger" @onclick="ToggleMobileMenu" aria-label="Toggle menu">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </button>
+    }
     
     @if (!_statusLoaded)
     {

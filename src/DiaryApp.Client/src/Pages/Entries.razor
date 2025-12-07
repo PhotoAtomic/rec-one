@@ -71,11 +71,28 @@ else
                                 </svg>
                             </button>
                             <button type="button"
+                                    class="icon-button"
+                                    title="Show transcript"
+                                    aria-label="Show transcript"
+                                    disabled="@IsTranscriptLoading(entry.Id)"
+                                    @onclick="() => LoadTranscript(entry.Id)">
+                                @if (IsTranscriptLoading(entry.Id))
+                                {
+                                    <span class="button-spinner" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                                    </svg>
+                                }
+                            </button>
+                            <button type="button"
                                     class="icon-button danger"
                                     title="Delete entry"
                                     aria-label="Delete entry"
                                     disabled="@IsDeleting(entry.Id)"
-                                    @onclick="() => DeleteEntry(entry.Id)">
+                                    @onclick="() => ConfirmDelete(entry)">
                                 @if (IsDeleting(entry.Id))
                                 {
                                     <span class="button-spinner" aria-hidden="true"></span>
@@ -116,22 +133,6 @@ else
                     </div>
                 </div>
 
-                <div class="entry-card__footer">
-                    <button class="with-spinner secondary"
-                            @onclick="() => LoadTranscript(entry.Id)"
-                            disabled="@IsTranscriptLoading(entry.Id)">
-                        @if (IsTranscriptLoading(entry.Id))
-                        {
-                            <span class="button-spinner" aria-hidden="true"></span>
-                            <span>Loading transcript...</span>
-                        }
-                        else
-                        {
-                            <span>Show transcript</span>
-                        }
-                    </button>
-                </div>
-
                 @if (_transcripts.TryGetValue(entry.Id, out var transcript))
                 {
                     <details open>
@@ -151,6 +152,24 @@ else
     </ul>
 }
 
+@if (_entryToDelete is not null)
+{
+    <div class="confirm-dialog-overlay" @onclick="CancelDelete">
+        <div class="confirm-dialog" @onclick:stopPropagation="true">
+            <div class="confirm-dialog__header">
+                <h3>Delete Entry</h3>
+            </div>
+            <div class="confirm-dialog__content">
+                <p>Are you sure you want to delete "<strong>@_entryToDelete.Title</strong>"? This action cannot be undone.</p>
+            </div>
+            <div class="confirm-dialog__actions">
+                <button type="button" class="secondary" @onclick="CancelDelete">Cancel</button>
+                <button type="button" class="danger" @onclick="ConfirmDeleteEntry">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _keyword = string.Empty;
     private IReadOnlyCollection<VideoEntryDto>? _results;
@@ -161,6 +180,7 @@ else
     private readonly HashSet<Guid> _processingEntries = new();
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
+    private VideoEntryDto? _entryToDelete;
 
     protected override async Task OnInitializedAsync()
     {
@@ -251,6 +271,29 @@ else
     private void OpenEditor(Guid id)
     {
         NavigationManager.NavigateTo($"/entries/{id}/edit");
+    }
+
+    private void ConfirmDelete(VideoEntryDto entry)
+    {
+        _entryToDelete = entry;
+    }
+
+    private void CancelDelete()
+    {
+        _entryToDelete = null;
+    }
+
+    private async Task ConfirmDeleteEntry()
+    {
+        if (_entryToDelete is null)
+        {
+            return;
+        }
+
+        var id = _entryToDelete.Id;
+        _entryToDelete = null;
+
+        await DeleteEntry(id);
     }
 
     private async Task DeleteEntry(Guid id)
