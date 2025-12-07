@@ -11,7 +11,19 @@
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 
-<h1>Capture a new entry</h1>
+<div class="page-header page-header--spaced">
+    <h1>Capture a new entry</h1>
+    <a href="/entries" class="go-to-entries-button" title="View entries" aria-label="View entries">
+        <svg viewBox="0 0 36 24" class="go-to-entries-icon" aria-hidden="true">
+            <!-- Book/diary icon -->
+            <path d="M4 4h14c1 0 2 1 2 2v12c0 1-1 2-2 2H4c-1 0-2-1-2-2V6c0-1 1-2 2-2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M6 4v16" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M9 8h6M9 11h6M9 14h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <!-- Arrow pointing right -->
+            <path d="M26 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </a>
+</div>
 
 <section class="capture-panel">
     <div class="capture-panel__content">

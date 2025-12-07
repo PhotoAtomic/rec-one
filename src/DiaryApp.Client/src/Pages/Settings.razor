@@ -10,7 +10,17 @@
 @using DiaryApp.Shared.Abstractions
 @using Microsoft.JSInterop
 
-<h1>Recording Settings</h1>
+<div class="page-header">
+    <a href="/" class="back-to-record-button" title="Back to recording" aria-label="Back to recording">
+        <svg viewBox="0 0 32 24" class="back-to-record-icon" aria-hidden="true">
+            <!-- Arrow pointing left -->
+            <path d="M10 7l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- REC circle -->
+            <circle cx="22" cy="12" r="5" fill="#ff4444"/>
+        </svg>
+    </a>
+    <h1>Recording Settings</h1>
+</div>
 
 @if (_isLoading)
 {
@@ -64,10 +74,6 @@ else
 
         <div class="settings-actions">
             <button type="submit" disabled="@_isSaving">Save preferences</button>
-            <button type="button"
-                    class="secondary"
-                    disabled="@_isRefreshingDevices"
-                    @onclick="() => RefreshDevices(true)">Refresh devices</button>
         </div>
     </EditForm>
 
@@ -95,8 +101,7 @@ else
     if (!_deviceAccessGranted)
     {
         <p class="settings-warning">
-            We couldn't enumerate your media devices. Please grant the browser permission to use your camera and microphone,
-            then refresh the device list.
+            We couldn't enumerate your media devices. Please grant the browser permission to use your camera and microphone.
         </p>
     }
 
@@ -264,7 +269,6 @@ else
     private readonly PreferencesModel _formModel = new();
     private bool _isLoading = true;
     private bool _isSaving;
-    private bool _isRefreshingDevices;
     private bool _deviceAccessGranted = true;
     private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
@@ -352,7 +356,6 @@ else
 
     private async Task RefreshDevices(bool requestPermissions = false)
     {
-        _isRefreshingDevices = true;
         _statusMessage = null;
         try
         {
@@ -366,10 +369,6 @@ else
         {
             _deviceAccessGranted = false;
             _statusMessage = $"Unable to read devices: {jsEx.Message}";
-        }
-        finally
-        {
-            _isRefreshingDevices = false;
         }
     }
 

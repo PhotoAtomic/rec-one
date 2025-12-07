@@ -5,9 +5,19 @@
 @inject ITranscriptionClient TranscriptionClient
 @inject NavigationManager NavigationManager
 
-<h1>Entries</h1>
+<div class="page-header">
+    <a href="/" class="back-to-record-button" title="Back to recording" aria-label="Back to recording">
+        <svg viewBox="0 0 32 24" class="back-to-record-icon" aria-hidden="true">
+            <!-- Arrow pointing left -->
+            <path d="M10 7l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- REC circle -->
+            <circle cx="22" cy="12" r="5" fill="#ff4444"/>
+        </svg>
+    </a>
+    <h1>Entries</h1>
+</div>
 
-<EditForm Model="this" OnValidSubmit="Search">
+<EditForm Model="this" OnValidSubmit="Search" class="search-form">
     <input @bind="_keyword" placeholder="Search by keyword or describe a moment" />
     <button type="submit">Search</button>
 </EditForm>
@@ -125,8 +135,15 @@ else
                 @if (_transcripts.TryGetValue(entry.Id, out var transcript))
                 {
                     <details open>
-                        <summary>Transcript</summary>
-                        <p>@transcript</p>
+                        <summary>
+                            <svg class="details-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                            <span>Transcript</span>
+                        </summary>
+                        <div class="details-content">
+                            <p class="transcript-text">@transcript</p>
+                        </div>
                     </details>
                 }
             </li>
