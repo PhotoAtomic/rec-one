@@ -4,6 +4,10 @@ A self-hosted, mobile-ready progressive web application for capturing and search
 
 > **Created entirely with Codex guidance:** every source file in this repository was generated or edited through OpenAI's Codex (via prompt engineering and follow-up debugging instructions). No manual coding took place beyond supplying prompts and reviewing results, aside from a few inline comments in `appsettings.json` to steer configuration. Think of this project as a full demonstration of "vibe coding" an end-to-end app with AI assistance.
 
+
+### Try it live!
+You can play with it at https://rec-one.dev
+
 ## Project structure
 
 ```
@@ -351,3 +355,4 @@ services:
     image: your-registry/rec-one-diaryapp:latest
     # other settings (ports, volumes, environment) unchanged
 ```
+
