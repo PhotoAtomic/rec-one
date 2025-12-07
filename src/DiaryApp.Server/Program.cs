@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -241,22 +242,20 @@ if (authenticationConfigured)
         });
     }
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorizationBuilder();
 }
 else
 {
     // When authentication is not configured, add authorization with an allow-all policy
-    builder.Services.AddAuthorization(options =>
-    {
-        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+    builder.Services.AddAuthorizationBuilder()
+        .SetFallbackPolicy(new AuthorizationPolicyBuilder()
             .RequireAssertion(_ => true)
-            .Build();
-    });
+            .Build());
 }
 
 builder.Services.AddResponseCompression(opts =>
 {
-    opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/octet-stream" });
+    opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/octet-stream"]);
 });
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -281,9 +280,9 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api"))
     {
-        context.Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0";
-        context.Response.Headers["Pragma"] = "no-cache";
-        context.Response.Headers["Expires"] = "0";
+        context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers.Expires = "0";
     }
 
     await next();
@@ -400,11 +399,14 @@ uploads.MapPost("/{id:guid}/complete", async (
 
         await searchIndex.IndexAsync(entry, cancellationToken);
 
-        logger.LogInformation(
-            "Completed chunked upload {UploadId} into entry {EntryId} ({Uploaded} bytes)",
-            id,
-            entry.Id,
-            uploadedBytes);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Completed chunked upload {UploadId} into entry {EntryId} ({Uploaded} bytes)",
+                id,
+                entry.Id,
+                uploadedBytes);
+        }
 
         return Results.Created($"/api/entries/{entry.Id}", entry);
     }
@@ -488,7 +490,10 @@ entries.MapPost("/", async (
 
     await searchIndex.IndexAsync(entry, cancellationToken);
 
-    logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
+    if (logger.IsEnabled(LogLevel.Information))
+    {
+        logger.LogInformation("Created entry {EntryId} with {Size} bytes", entry.Id, file.Length);
+    }
 
     return Results.Created($"/api/entries/{entry.Id}", entry);
 });
@@ -775,7 +780,7 @@ internal static class EntryEndpointHelpers
     {
         var tags = request.Tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? Array.Empty<string>();
+            .ToArray() ?? [];
 
         var title = string.IsNullOrWhiteSpace(request.Title) ? "Untitled" : request.Title.Trim();
         return new VideoEntryUpdateRequest(title, request.Description, request.Summary, request.Transcript, tags);
@@ -783,7 +788,7 @@ internal static class EntryEndpointHelpers
 
     public static IReadOnlyCollection<string> ParseTags(string? value)
         => string.IsNullOrWhiteSpace(value)
-            ? Array.Empty<string>()
+            ? []
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -846,23 +851,23 @@ internal static class EntryEndpointHelpers
     {
         if (string.IsNullOrWhiteSpace(description))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         var trimmedDescription = description.Trim();
         if (string.IsNullOrWhiteSpace(trimmedDescription))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         var preferences = string.IsNullOrWhiteSpace(userSegment)
             ? await store.GetPreferencesAsync(cancellationToken).ConfigureAwait(false)
             : await store.GetPreferencesAsync(userSegment, cancellationToken).ConfigureAwait(false);
         
-        var favoriteTags = (preferences.FavoriteTags ?? Array.Empty<string>()).ToArray();
+        var favoriteTags = (preferences.FavoriteTags ?? []).ToArray();
         if (favoriteTags.Length == 0)
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         var suggestions = await tagSuggestions.GenerateTagsAsync(
@@ -873,7 +878,7 @@ internal static class EntryEndpointHelpers
 
         if (suggestions.Count == 0)
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         var existing = new HashSet<string>(currentTags, StringComparer.OrdinalIgnoreCase);

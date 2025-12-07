@@ -24,5 +24,6 @@ builder.Services.AddScoped<IDevicePreferencesService, DevicePreferencesService>(
 builder.Services.AddScoped<VideoUploadService>();
 builder.Services.AddScoped<IOutgoingUploadQueue, OutgoingUploadQueue>();
 builder.Services.AddScoped<AuthenticationStatusService>();
+builder.Services.AddScoped<ToastService>();
 
 await builder.Build().RunAsync();

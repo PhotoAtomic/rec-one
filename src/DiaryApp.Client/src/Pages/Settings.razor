@@ -4,6 +4,7 @@
 @inject IDevicePreferencesService DevicePreferencesService
 @inject IServerSettingsClient ServerSettingsClient
 @inject IJSRuntime JsRuntime
+@inject ToastService ToastService
 @using System
 @using System.Collections.Generic
 @using System.Linq
@@ -103,11 +104,6 @@ else
         <p class="settings-warning">
             We couldn't enumerate your media devices. Please grant the browser permission to use your camera and microphone.
         </p>
-    }
-
-    if (!string.IsNullOrWhiteSpace(_statusMessage))
-    {
-        <p>@_statusMessage</p>
     }
 }
 
@@ -270,7 +266,6 @@ else
     private bool _isLoading = true;
     private bool _isSaving;
     private bool _deviceAccessGranted = true;
-    private string? _statusMessage;
     private List<MediaDeviceInfo> _cameras = new();
     private List<MediaDeviceInfo> _microphones = new();
     private HttpsCertificateInfo _httpsCertificateInfo = new(false, null);
@@ -310,7 +305,7 @@ else
             }
             catch (Exception ex)
             {
-                _statusMessage = $"Failed to initialize settings: {ex.Message}";
+                ToastService.ShowError($"Failed to initialize settings: {ex.Message}");
             }
             finally
             {
@@ -320,7 +315,7 @@ else
                 }
                 catch (Exception ex)
                 {
-                    _statusMessage ??= $"Failed to load HTTPS certificate info: {ex.Message}";
+                    ToastService.ShowError($"Failed to load HTTPS certificate info: {ex.Message}");
                 }
 
                 _isLoading = false;
@@ -356,7 +351,6 @@ else
 
     private async Task RefreshDevices(bool requestPermissions = false)
     {
-        _statusMessage = null;
         try
         {
             _mediaDevicesModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/mediaDevices.js");
@@ -368,14 +362,13 @@ else
         catch (JSException jsEx)
         {
             _deviceAccessGranted = false;
-            _statusMessage = $"Unable to read devices: {jsEx.Message}";
+            ToastService.ShowWarning($"Unable to read devices: {jsEx.Message}");
         }
     }
 
     private async Task SavePreferences()
     {
         _isSaving = true;
-        _statusMessage = null;
         try
         {
             // Save device preferences to cookie
@@ -392,11 +385,11 @@ else
                 ParseFavoriteTags(_formModel.FavoriteTags));
             await MediaSettingsClient.SaveMediaPreferencesAsync(serverPrefs);
 
-            _statusMessage = "Preferences saved. Future recordings will use the selected devices.";
+            ToastService.ShowSuccess("Preferences saved. Future recordings will use the selected devices.");
         }
         catch (Exception ex)
         {
-            _statusMessage = $"Failed to save preferences: {ex.Message}";
+            ToastService.ShowError($"Failed to save preferences: {ex.Message}");
         }
         finally
         {

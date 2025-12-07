@@ -1,0 +1,110 @@
+@implements IDisposable
+@inject ToastService ToastService
+
+@if (_currentToast is not null)
+{
+    <div class="toast-container">
+        <div class="toast toast--@GetToastTypeClass(_currentToast.Type) @(_isHiding ? "toast--hiding" : "")">
+            <div class="toast__icon">
+                @switch (_currentToast.Type)
+                {
+                    case ToastType.Success:
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                        break;
+                    case ToastType.Error:
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                        break;
+                    case ToastType.Warning:
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                        </svg>
+                        break;
+                    case ToastType.Info:
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                        </svg>
+                        break;
+                }
+            </div>
+            <span class="toast__message">@_currentToast.Message</span>
+            <button class="toast__close" @onclick="Hide" aria-label="Dismiss">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private ToastMessage? _currentToast;
+    private bool _isHiding;
+    private CancellationTokenSource? _autoHideCts;
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += ShowToast;
+        ToastService.OnHide += Hide;
+    }
+
+    private async void ShowToast(ToastMessage toast)
+    {
+        // Cancel any pending auto-hide
+        _autoHideCts?.Cancel();
+        _autoHideCts = new CancellationTokenSource();
+
+        _isHiding = false;
+        _currentToast = toast;
+        await InvokeAsync(StateHasChanged);
+
+        // Auto-hide after duration
+        try
+        {
+            await Task.Delay(toast.DurationMs, _autoHideCts.Token);
+            await HideWithAnimation();
+        }
+        catch (TaskCanceledException)
+        {
+            // Cancelled, ignore
+        }
+    }
+
+    private async void Hide()
+    {
+        await HideWithAnimation();
+    }
+
+    private async Task HideWithAnimation()
+    {
+        _autoHideCts?.Cancel();
+        _isHiding = true;
+        await InvokeAsync(StateHasChanged);
+
+        // Wait for animation to complete
+        await Task.Delay(300);
+        _currentToast = null;
+        _isHiding = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetToastTypeClass(ToastType type) => type switch
+    {
+        ToastType.Success => "success",
+        ToastType.Error => "error",
+        ToastType.Warning => "warning",
+        ToastType.Info => "info",
+        _ => "info"
+    };
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= ShowToast;
+        ToastService.OnHide -= Hide;
+        _autoHideCts?.Cancel();
+        _autoHideCts?.Dispose();
+    }
+}
