@@ -22,38 +22,42 @@
     }
     else
     {
-        <div class="nav-links @(_mobileMenuOpen ? "mobile-open" : "")">
-            <NavLink href="/" class="nav-link" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">Record</NavLink>
-            <NavLink href="/entries" class="nav-link" @onclick="CloseMobileMenu">Entries</NavLink>
-            <NavLink href="/outgoing" class="nav-link" @onclick="CloseMobileMenu">Outgoing</NavLink>
-            <NavLink href="/settings" class="nav-link" @onclick="CloseMobileMenu">Settings</NavLink>
-            @if (_pwaInstallAvailable)
-            {
-                <a href="#" class="nav-link" @onclick="TriggerInstall">Install</a>
-            }
-        </div>
-        <div class="nav-menu-right @(_mobileMenuOpen ? "mobile-open" : "")">
-            @if (_status.AuthenticationEnabled)
-            {
-                <button class="nav-link nav-disclaimer-button" @onclick="ShowDisclaimer" title="Show disclaimer">
-                    <svg class="disclaimer-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L2 20h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M11 10h2v5h-2v-5zm0 6h2v2h-2v-2z" fill="currentColor"/>
-                    </svg>
-                </button>
-            }
-            @if (_status.IsAuthenticated)
-            {
-                <div class="nav-greeting" title="@(_status.Name ?? "there")">Hi, @(_status.Name ?? "there")</div>
-                <a href="/logout" class="nav-link" @onclick="CloseMobileMenu">Logout</a>
-            }
-            else if (_statusLoaded && _status.AuthenticationEnabled)
-            {
-                <a href="/login" class="nav-link" @onclick="CloseMobileMenu">Login</a>
-            }
+        <div class="nav-mobile-dropdown @(_mobileMenuOpen ? "mobile-open" : "")">
+            <div class="nav-links @(_mobileMenuOpen ? "mobile-open" : "")">
+                <NavLink href="/" class="nav-link" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">Record</NavLink>
+                <NavLink href="/entries" class="nav-link" @onclick="CloseMobileMenu">Entries</NavLink>
+                <NavLink href="/outgoing" class="nav-link" @onclick="CloseMobileMenu">Outgoing</NavLink>
+                <NavLink href="/settings" class="nav-link" @onclick="CloseMobileMenu">Settings</NavLink>
+                @if (_pwaInstallAvailable)
+                {
+                    <a href="#" class="nav-link" @onclick="TriggerInstall">Install</a>
+                }
+            </div>
+            <div class="nav-menu-right @(_mobileMenuOpen ? "mobile-open" : "")">
+                @if (_status.IsAuthenticated)
+                {
+                    <div class="nav-greeting" title="@(_status.Name ?? "there")">Hi, @(_status.Name ?? "there")</div>
+                    <a href="/logout" class="nav-link" @onclick="CloseMobileMenu">Logout</a>
+                }
+                else if (_statusLoaded && _status.AuthenticationEnabled)
+                {
+                    <a href="/login" class="nav-link" @onclick="CloseMobileMenu">Login</a>
+                }
+            </div>
         </div>
     }
-    <span class="nav-version">v@_version</span>
+    <div class="nav-version-area">
+        @if (_statusLoaded && _status.AuthenticationEnabled)
+        {
+            <button class="nav-disclaimer-button" @onclick="ShowDisclaimer" title="Show disclaimer">
+                <svg class="disclaimer-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 20h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M11 10h2v5h-2v-5zm0 6h2v2h-2v-2z" fill="currentColor"/>
+                </svg>
+            </button>
+        }
+        <span class="nav-version">v@_version</span>
+    </div>
 </nav>
 
 <DisclaimerModal @ref="_disclaimerModal" AutoShow="false" AllowDismiss="true" />

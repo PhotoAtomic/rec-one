@@ -10,6 +10,7 @@
     justify-content: center;
     z-index: 10000;
     padding: 20px;
+    box-sizing: border-box;
 }
 
 .disclaimer-modal {
@@ -22,6 +23,7 @@
     flex-direction: column;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: disclaimerFadeIn 0.3s ease;
+    box-sizing: border-box;
 }
 
 @keyframes disclaimerFadeIn {
@@ -140,16 +142,36 @@
 }
 
 @media (max-width: 600px) {
+    .disclaimer-overlay {
+        padding: 16px;
+    }
+
     .disclaimer-modal {
         max-height: 90vh;
         margin: 0;
+        max-width: calc(100% - 32px);
+    }
+
+    .disclaimer-header {
+        padding: 20px 20px 14px;
     }
 
     .disclaimer-header h2 {
         font-size: 20px;
+        padding-right: 30px;
+    }
+
+    .disclaimer-close {
+        top: 16px;
+        right: 16px;
     }
 
     .disclaimer-content {
+        padding: 20px;
         font-size: 14px;
+    }
+
+    .disclaimer-footer {
+        padding: 16px 20px;
     }
 }
