@@ -719,9 +719,9 @@ public sealed class FileSystemVideoEntryStore : IVideoEntryStore
                 document.Entries ?? Array.Empty<StoredVideoEntry>(),
                 NormalizePreferences(document.Preferences));
 
-    private static string NormalizeLanguage(string? language)
+    private static string? NormalizeLanguage(string? language)
         => string.IsNullOrWhiteSpace(language)
-            ? UserMediaPreferences.Default.TranscriptLanguage
+            ? null
             : language.Trim();
 
     private Dictionary<Guid, StoredVideoEntry> GetOrCreateCache(string userSegment)

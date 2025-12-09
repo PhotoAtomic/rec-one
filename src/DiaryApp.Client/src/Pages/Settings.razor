@@ -115,7 +115,7 @@ else
     {
         public string? CameraDeviceId { get; set; }
         public string? MicrophoneDeviceId { get; set; }
-        public string TranscriptLanguage { get; set; } = UserMediaPreferences.Default.TranscriptLanguage;
+        public string TranscriptLanguage { get; set; } = "en-US";
         public string FavoriteTags { get; set; } = string.Empty;
     }
 
@@ -333,8 +333,51 @@ else
 
         // Load language and tags from server
         var serverPrefs = await MediaSettingsClient.GetMediaPreferencesAsync();
-        _formModel.TranscriptLanguage = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
+        _formModel.TranscriptLanguage = await GetEffectiveLanguageAsync(serverPrefs.TranscriptLanguage);
         _formModel.FavoriteTags = string.Join(", ", serverPrefs.FavoriteTags ?? Array.Empty<string>());
+    }
+
+    private async Task<string> GetEffectiveLanguageAsync(string? serverLanguage)
+    {
+        // If the server has an explicitly saved language, use it
+        if (!string.IsNullOrWhiteSpace(serverLanguage))
+        {
+            return serverLanguage;
+        }
+
+        // Otherwise, try to get the browser's language
+        try
+        {
+            _mediaDevicesModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/mediaDevices.js");
+            var browserLanguage = await _mediaDevicesModule.InvokeAsync<string?>("getBrowserLanguage");
+            
+            if (!string.IsNullOrWhiteSpace(browserLanguage))
+            {
+                // Check if the browser language is in our supported list
+                var match = LanguageOptions.FirstOrDefault(opt =>
+                    string.Equals(opt.Code, browserLanguage, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                {
+                    return match.Code;
+                }
+
+                // Try matching just the language part (e.g., "it" from "it-IT")
+                var languagePart = browserLanguage.Split('-')[0];
+                var partialMatch = LanguageOptions.FirstOrDefault(opt =>
+                    opt.Code.StartsWith(languagePart + "-", StringComparison.OrdinalIgnoreCase));
+                if (partialMatch is not null)
+                {
+                    return partialMatch.Code;
+                }
+            }
+        }
+        catch(Exception ex)
+        {
+            // If JS interop fails, fall back to default
+        }
+
+        // Fall back to English (US) if nothing else works
+        return "en-US";
     }
 
     private async Task LoadHttpsCertificateInfoAsync()
@@ -412,19 +455,19 @@ else
         => string.IsNullOrWhiteSpace(value) || value == "default" ? null : value;
 
     private static string NormalizeLanguageForInput(string? code)
-        => string.IsNullOrWhiteSpace(code) ? UserMediaPreferences.Default.TranscriptLanguage : code;
+        => string.IsNullOrWhiteSpace(code) ? "en-US" : code;
 
     private static string NormalizeLanguageSelection(string? code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            return UserMediaPreferences.Default.TranscriptLanguage;
+            return "en-US";
         }
 
         var normalized = code.Trim();
         return LanguageOptions.Any(option => string.Equals(option.Code, normalized, StringComparison.OrdinalIgnoreCase))
             ? normalized
-            : UserMediaPreferences.Default.TranscriptLanguage;
+            : "en-US";
     }
 
     private static bool IsUnconfigured(DevicePreferences devicePrefs, UserMediaPreferences serverPrefs)
@@ -432,11 +475,7 @@ else
         var hasCamera = !string.IsNullOrWhiteSpace(devicePrefs.CameraDeviceId);
         var hasMicrophone = !string.IsNullOrWhiteSpace(devicePrefs.MicrophoneDeviceId);
         var hasFavoriteTags = serverPrefs.FavoriteTags is { Count: > 0 };
-        var language = NormalizeLanguageForInput(serverPrefs.TranscriptLanguage);
-        var hasCustomLanguage = !string.Equals(
-            language,
-            UserMediaPreferences.Default.TranscriptLanguage,
-            StringComparison.OrdinalIgnoreCase);
+        var hasCustomLanguage = !string.IsNullOrWhiteSpace(serverPrefs.TranscriptLanguage);
 
         return !hasCamera && !hasMicrophone && !hasFavoriteTags && !hasCustomLanguage;
     }

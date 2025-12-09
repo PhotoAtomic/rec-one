@@ -21,3 +21,9 @@ export async function listDevices(requestPermissions = false) {
             label: device.label || device.kind
         }));
 }
+
+export function getBrowserLanguage() {
+    // Get the browser's preferred language
+    // navigator.language returns a BCP 47 language tag like "en-US", "it-IT", etc.
+    return navigator.language || navigator.userLanguage || null;
+}

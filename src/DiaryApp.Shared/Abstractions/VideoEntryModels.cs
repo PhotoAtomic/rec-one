@@ -92,10 +92,11 @@ public record UserMediaPreferences(
     string? CameraDeviceId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? MicrophoneDeviceId,
-    string TranscriptLanguage = "en-US",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TranscriptLanguage = null,
     IReadOnlyCollection<string>? FavoriteTags = null)
 {
-    public static readonly UserMediaPreferences Default = new(null, null, "en-US", Array.Empty<string>());
+    public static readonly UserMediaPreferences Default = new(null, null, null, Array.Empty<string>());
 }
 
 public record UserEntriesDocument(
