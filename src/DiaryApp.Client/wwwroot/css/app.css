@@ -434,6 +434,14 @@ video {
     background-color: black;
 }
 
+.capture-preview__video.mirrored {
+    transform: scaleX(-1);
+}
+
+.capture-preview__video.clickable {
+    cursor: pointer;
+}
+
 .capture-actions {
     display: flex;
     flex-wrap: wrap;
@@ -660,6 +668,25 @@ video {
     border-radius: 12px;
     background: rgba(255, 183, 77, 0.1);
     color: #ffcc80;
+}
+
+/* Field validation warning styles */
+select.field-warning,
+input.field-warning {
+    border-color: #ffb74d;
+    box-shadow: 0 0 0 2px rgba(255, 183, 77, 0.25);
+}
+
+select.field-warning:focus,
+input.field-warning:focus {
+    border-color: #ffa726;
+    box-shadow: 0 0 0 2px rgba(255, 167, 38, 0.35);
+    outline: none;
+}
+
+.field-warning-text {
+    color: #ffb74d;
+    font-size: 0.85rem;
 }
 
 #blazor-error-ui {

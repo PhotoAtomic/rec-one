@@ -33,16 +33,16 @@ public sealed class DevicePreferencesService : IDevicePreferencesService, IAsync
         }
     }
 
-    public async Task SaveDevicePreferencesAsync(DevicePreferences preferences)
+    public async Task<bool> SaveDevicePreferencesAsync(DevicePreferences preferences)
     {
         try
         {
             var module = await GetModuleAsync();
-            await module.InvokeVoidAsync("setDevicePreferences", preferences.CameraDeviceId, preferences.MicrophoneDeviceId);
+            return await module.InvokeAsync<bool>("setDevicePreferences", preferences.CameraDeviceId, preferences.MicrophoneDeviceId);
         }
         catch (Exception)
         {
-            // Cookie save failures are non-fatal
+            return false;
         }
     }
 

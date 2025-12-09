@@ -55,7 +55,7 @@ public interface IMediaSettingsClient
 public interface IDevicePreferencesService
 {
     Task<DevicePreferences> GetDevicePreferencesAsync();
-    Task SaveDevicePreferencesAsync(DevicePreferences preferences);
+    Task<bool> SaveDevicePreferencesAsync(DevicePreferences preferences);
     Task ClearDevicePreferencesAsync();
 }
 

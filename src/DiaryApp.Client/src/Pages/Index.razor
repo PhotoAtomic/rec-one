@@ -28,7 +28,12 @@
 <section class="capture-panel">
     <div class="capture-panel__content">
         <div class="capture-preview">
-            <video class="capture-preview__video" @ref="_videoRef" playsinline muted></video>
+            <video class="capture-preview__video @(_isMirrored && !_captureScreen ? "mirrored" : "") @(_isRecording && !_captureScreen ? "clickable" : "")" 
+                   @ref="_videoRef" 
+                   playsinline 
+                   muted
+                   @onclick="ToggleMirror"
+                   title="@(_isRecording && !_captureScreen ? "Click to toggle mirror" : "")"></video>
             <div class="recording-monitor" aria-live="off">
                 <span class="recording-monitor__label">Microphone level</span>
                 <div class="vu-meter" @ref="_vuMeterRef" role="img" aria-label="Live microphone level meter">
@@ -104,6 +109,7 @@
     private string _tagInput = string.Empty;
     private string? _statusMessage;
     private bool _captureScreen;
+    private bool _isMirrored = true;
     private ElementReference _formContainer;
     private ElementReference _titleInput;
     private ElementReference _saveButton;
@@ -114,6 +120,15 @@
     private void ToggleDetails()
     {
         _detailsExpanded = !_detailsExpanded;
+    }
+
+    private void ToggleMirror()
+    {
+        // Only allow toggling mirror when recording webcam (not screen capture)
+        if (_isRecording && !_captureScreen)
+        {
+            _isMirrored = !_isMirrored;
+        }
     }
 
     private async Task StartRecording()
@@ -226,6 +241,7 @@
         _tagInput = string.Empty;
         _statusMessage = null;
         _captureScreen = false;
+        _isMirrored = true;
         _detailsExpanded = false;
     }
 
