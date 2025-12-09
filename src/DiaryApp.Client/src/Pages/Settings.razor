@@ -36,6 +36,7 @@ else
                     class="@(IsCameraNotConfigured ? "field-warning" : "")"
                     @bind="_formModel.CameraDeviceId"
                     @onfocus="OnDeviceSelectFocus"
+                    @onclick="OnDeviceSelectFocus"
                     @onpointerdown="OnDeviceSelectFocus">
                 @if (_cameras.Count == 0)
                 {
@@ -66,6 +67,7 @@ else
                     class="@(IsMicrophoneNotConfigured ? "field-warning" : "")"
                     @bind="_formModel.MicrophoneDeviceId"
                     @onfocus="OnDeviceSelectFocus"
+                    @onclick="OnDeviceSelectFocus"
                     @onpointerdown="OnDeviceSelectFocus">
                 @if (_microphones.Count == 0)
                 {
@@ -524,13 +526,18 @@ else
                 
                 StateHasChanged();
             }
-            else if (showToast)
+            else
             {
-                ToastService.ShowError($"Permission denied: {result.Error}. Please check your browser settings.");
+                _permissionsRequested = false;
+                if (showToast)
+                {
+                    ToastService.ShowError($"Permission denied: {result.Error}. Please check your browser settings.");
+                }
             }
         }
         catch (Exception ex)
         {
+            _permissionsRequested = false;
             if (showToast)
             {
                 ToastService.ShowError($"Failed to request permissions: {ex.Message}");
@@ -619,10 +626,10 @@ else
     }
 
     private static string NormalizeForInput(string? value)
-        => string.IsNullOrWhiteSpace(value) || value == "default" ? string.Empty : value;
+        => string.IsNullOrWhiteSpace(value) ? string.Empty : value;
 
     private static string? NormalizeSelection(string? value)
-        => string.IsNullOrWhiteSpace(value) || value == "default" ? null : value;
+        => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static string NormalizeLanguageForInput(string? code)
         => string.IsNullOrWhiteSpace(code) ? "en-US" : code;
