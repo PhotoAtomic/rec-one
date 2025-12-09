@@ -25,7 +25,7 @@ public sealed class DevicePreferencesService : IDevicePreferencesService, IAsync
         {
             var module = await GetModuleAsync();
             var result = await module.InvokeAsync<DevicePreferencesDto>("getDevicePreferences");
-            return new DevicePreferences(result.CameraDeviceId, result.MicrophoneDeviceId);
+            return new DevicePreferences(result.CameraDeviceId, result.MicrophoneDeviceId, result.CameraLabel, result.MicrophoneLabel);
         }
         catch (Exception)
         {
@@ -38,7 +38,7 @@ public sealed class DevicePreferencesService : IDevicePreferencesService, IAsync
         try
         {
             var module = await GetModuleAsync();
-            return await module.InvokeAsync<bool>("setDevicePreferences", preferences.CameraDeviceId, preferences.MicrophoneDeviceId);
+            return await module.InvokeAsync<bool>("setDevicePreferences", preferences.CameraDeviceId, preferences.MicrophoneDeviceId, preferences.CameraLabel, preferences.MicrophoneLabel);
         }
         catch (Exception)
         {
@@ -71,5 +71,7 @@ public sealed class DevicePreferencesService : IDevicePreferencesService, IAsync
     {
         public string? CameraDeviceId { get; set; }
         public string? MicrophoneDeviceId { get; set; }
+        public string? CameraLabel { get; set; }
+        public string? MicrophoneLabel { get; set; }
     }
 }

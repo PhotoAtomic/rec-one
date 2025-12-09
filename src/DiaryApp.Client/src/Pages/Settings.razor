@@ -35,11 +35,19 @@ else
             <select id="cameraSelect" 
                     class="@(IsCameraNotConfigured ? "field-warning" : "")"
                     @bind="_formModel.CameraDeviceId"
-                    @onfocus="OnDeviceSelectFocus">
-                <option value="">System default</option>
-                @foreach (var camera in _cameras)
+                    @onfocus="OnDeviceSelectFocus"
+                    @onpointerdown="OnDeviceSelectFocus">
+                @if (_cameras.Count == 0)
                 {
-                    <option value="@camera.DeviceId">@camera.Label</option>
+                    <option value="" disabled>@GetDevicePlaceholderText(_savedCameraLabel)</option>
+                }
+                else
+                {
+                    <option value="">System default</option>
+                    @foreach (var camera in _cameras)
+                    {
+                        <option value="@camera.DeviceId">@camera.Label</option>
+                    }
                 }
             </select>
             @if (IsCameraNotConfigured)
@@ -57,11 +65,19 @@ else
             <select id="microphoneSelect"
                     class="@(IsMicrophoneNotConfigured ? "field-warning" : "")"
                     @bind="_formModel.MicrophoneDeviceId"
-                    @onfocus="OnDeviceSelectFocus">
-                <option value="">System default</option>
-                @foreach (var microphone in _microphones)
+                    @onfocus="OnDeviceSelectFocus"
+                    @onpointerdown="OnDeviceSelectFocus">
+                @if (_microphones.Count == 0)
                 {
-                    <option value="@microphone.DeviceId">@microphone.Label</option>
+                    <option value="" disabled>@GetDevicePlaceholderText(_savedMicrophoneLabel)</option>
+                }
+                else
+                {
+                    <option value="">System default</option>
+                    @foreach (var microphone in _microphones)
+                    {
+                        <option value="@microphone.DeviceId">@microphone.Label</option>
+                    }
                 }
             </select>
             @if (IsMicrophoneNotConfigured)
@@ -145,6 +161,7 @@ else
 
 @code
 {
+    private const string DevicePlaceholderText = "choose device";
     private record MediaDeviceInfo(string DeviceId, string Kind, string Label);
     private record LanguageOption(string Code, string DisplayName);
     private sealed class PreferencesModel
@@ -304,6 +321,8 @@ else
     private bool _isRequestingPermissions;
     private bool _permissionsRequested;
     private bool _deviceAccessGranted = true;
+    private string? _savedCameraLabel;
+    private string? _savedMicrophoneLabel;
     private List<MediaDeviceInfo> _cameras = new();
     private List<MediaDeviceInfo> _microphones = new();
     private HttpsCertificateInfo _httpsCertificateInfo = new(false, null);
@@ -358,6 +377,9 @@ else
         var devicePrefs = await DevicePreferencesService.GetDevicePreferencesAsync();
         _formModel.CameraDeviceId = NormalizeForInput(devicePrefs.CameraDeviceId);
         _formModel.MicrophoneDeviceId = NormalizeForInput(devicePrefs.MicrophoneDeviceId);
+        _savedCameraLabel = devicePrefs.CameraLabel;
+        _savedMicrophoneLabel = devicePrefs.MicrophoneLabel;
+        UpdateCachedDeviceLabels();
 
         // Load language and tags from server
         var serverPrefs = await MediaSettingsClient.GetMediaPreferencesAsync();
@@ -430,9 +452,11 @@ else
         {
             _mediaDevicesModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/mediaDevices.js");
             var devices = await _mediaDevicesModule.InvokeAsync<MediaDeviceInfo[]>("listDevices", requestPermissions);
-            _cameras = devices.Where(d => d.Kind == "videoinput").ToList();
-            _microphones = devices.Where(d => d.Kind == "audioinput").ToList();
-            _deviceAccessGranted = devices.Any();
+            var labeledDevices = devices.Where(d => !string.IsNullOrWhiteSpace(d.Label)).ToList();
+            _cameras = labeledDevices.Where(d => d.Kind == "videoinput").ToList();
+            _microphones = labeledDevices.Where(d => d.Kind == "audioinput").ToList();
+            _deviceAccessGranted = labeledDevices.Any();
+            UpdateCachedDeviceLabels();
         }
         catch (JSException jsEx)
         {
@@ -523,11 +547,24 @@ else
         
         try
         {
+            var selectedCameraId = NormalizeSelection(_formModel.CameraDeviceId);
+            var selectedMicrophoneId = NormalizeSelection(_formModel.MicrophoneDeviceId);
+            var resolvedCameraLabel = ResolveDeviceLabel(selectedCameraId, _cameras, _savedCameraLabel);
+            var resolvedMicrophoneLabel = ResolveDeviceLabel(selectedMicrophoneId, _microphones, _savedMicrophoneLabel);
+
             // Save device preferences to local storage (with cookie fallback)
             var devicePrefs = new DevicePreferences(
-                NormalizeSelection(_formModel.CameraDeviceId),
-                NormalizeSelection(_formModel.MicrophoneDeviceId));
+                selectedCameraId,
+                selectedMicrophoneId,
+                resolvedCameraLabel,
+                resolvedMicrophoneLabel);
             deviceSaveSuccess = await DevicePreferencesService.SaveDevicePreferencesAsync(devicePrefs);
+
+            if (deviceSaveSuccess)
+            {
+                _savedCameraLabel = resolvedCameraLabel;
+                _savedMicrophoneLabel = resolvedMicrophoneLabel;
+            }
 
             // Save language and tags to server (without device IDs)
             var serverPrefs = new UserMediaPreferences(
@@ -602,6 +639,35 @@ else
 
         return !hasCamera && !hasMicrophone && !hasFavoriteTags && !hasCustomLanguage;
     }
+
+    private static string? ResolveDeviceLabel(string? selectedDeviceId, IReadOnlyCollection<MediaDeviceInfo> devices, string? fallbackLabel)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        {
+            return null;
+        }
+
+        var match = devices.FirstOrDefault(device => string.Equals(device.DeviceId, selectedDeviceId, StringComparison.Ordinal));
+        return match?.Label ?? fallbackLabel;
+    }
+
+    private void UpdateCachedDeviceLabels()
+    {
+        var normalizedCameraId = NormalizeSelection(_formModel.CameraDeviceId);
+        if (!string.IsNullOrWhiteSpace(normalizedCameraId))
+        {
+            _savedCameraLabel = ResolveDeviceLabel(normalizedCameraId, _cameras, _savedCameraLabel);
+        }
+
+        var normalizedMicrophoneId = NormalizeSelection(_formModel.MicrophoneDeviceId);
+        if (!string.IsNullOrWhiteSpace(normalizedMicrophoneId))
+        {
+            _savedMicrophoneLabel = ResolveDeviceLabel(normalizedMicrophoneId, _microphones, _savedMicrophoneLabel);
+        }
+    }
+
+    private string GetDevicePlaceholderText(string? savedLabel)
+        => string.IsNullOrWhiteSpace(savedLabel) ? DevicePlaceholderText : savedLabel;
 
     private static IReadOnlyCollection<string> ParseFavoriteTags(string? value)
         => string.IsNullOrWhiteSpace(value)

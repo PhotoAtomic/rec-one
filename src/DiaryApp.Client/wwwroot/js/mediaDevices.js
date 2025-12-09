@@ -3,13 +3,8 @@ export async function listDevices(requestPermissions = false) {
         return [];
     }
 
-    // First, check if we already have permission by looking at device labels
     let devices = await navigator.mediaDevices.enumerateDevices();
-    const hasLabels = devices.some(device => 
-        (device.kind === 'videoinput' || device.kind === 'audioinput') && 
-        device.label && 
-        device.label.trim() !== ''
-    );
+    let hasLabels = hasUsableLabels(devices);
 
     // If we don't have labels and requestPermissions is true, request access
     // This is especially important for Safari which requires explicit user gesture
@@ -21,25 +16,30 @@ export async function listDevices(requestPermissions = false) {
             stream.getTracks().forEach((track) => track.stop());
             // Re-enumerate devices now that we have permission
             devices = await navigator.mediaDevices.enumerateDevices();
+            hasLabels = hasUsableLabels(devices);
         } catch (error) {
             // Try requesting just audio if video fails (e.g., no camera)
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioStream.getTracks().forEach((track) => track.stop());
                 devices = await navigator.mediaDevices.enumerateDevices();
+                hasLabels = hasUsableLabels(devices);
             } catch (audioError) {
                 console.warn('Unable to get media permissions:', audioError);
             }
         }
     }
 
-    return devices
+    const labeledDevices = devices
         .filter((device) => device.kind === 'videoinput' || device.kind === 'audioinput')
         .map((device) => ({
             deviceId: device.deviceId || 'default',
             kind: device.kind,
-            label: device.label || `${device.kind === 'videoinput' ? 'Camera' : 'Microphone'} (${device.deviceId.substring(0, 8)}...)`
-        }));
+            label: device.label?.trim() ?? ''
+        }))
+        .filter((device) => device.label !== '');
+
+    return hasLabels ? labeledDevices : [];
 }
 
 export function getBrowserLanguage() {
@@ -82,4 +82,12 @@ export async function requestMediaPermissions() {
             return { success: false, error: audioError.message || 'Permission denied' };
         }
     }
+}
+
+function hasUsableLabels(devices) {
+    return devices.some(device =>
+        (device.kind === 'videoinput' || device.kind === 'audioinput') &&
+        device.label &&
+        device.label.trim() !== ''
+    );
 }

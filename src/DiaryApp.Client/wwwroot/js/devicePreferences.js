@@ -102,19 +102,23 @@ export function getDevicePreferences() {
     }
     
     if (!preferences) {
-        return { cameraDeviceId: null, microphoneDeviceId: null };
+        return { cameraDeviceId: null, microphoneDeviceId: null, cameraLabel: null, microphoneLabel: null };
     }
     
     return {
         cameraDeviceId: preferences.cameraDeviceId || null,
-        microphoneDeviceId: preferences.microphoneDeviceId || null
+        microphoneDeviceId: preferences.microphoneDeviceId || null,
+        cameraLabel: preferences.cameraLabel || null,
+        microphoneLabel: preferences.microphoneLabel || null
     };
 }
 
-export function setDevicePreferences(cameraDeviceId, microphoneDeviceId) {
+export function setDevicePreferences(cameraDeviceId, microphoneDeviceId, cameraLabel, microphoneLabel) {
     const preferences = {
         cameraDeviceId: cameraDeviceId || null,
-        microphoneDeviceId: microphoneDeviceId || null
+        microphoneDeviceId: microphoneDeviceId || null,
+        cameraLabel: cameraLabel || null,
+        microphoneLabel: microphoneLabel || null
     };
     
     // Try localStorage first (works on Safari)

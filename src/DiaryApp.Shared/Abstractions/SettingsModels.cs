@@ -4,7 +4,9 @@ public sealed record HttpsCertificateInfo(bool IsConfigured, string? SuggestedFi
 
 public sealed record DevicePreferences(
     string? CameraDeviceId,
-    string? MicrophoneDeviceId)
+    string? MicrophoneDeviceId,
+    string? CameraLabel,
+    string? MicrophoneLabel)
 {
-    public static readonly DevicePreferences Default = new(null, null);
+    public static readonly DevicePreferences Default = new(null, null, null, null);
 }
