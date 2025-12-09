@@ -1,3 +1,12 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<HeadContent>
+    <link rel="icon" type="image/svg+xml" href='@asset("images/diary-favicon.svg")' />
+    <link rel="manifest" href='@asset("manifest.webmanifest")' />
+    <link rel="stylesheet" href='@asset("css/app.css")' />
+    <link rel="stylesheet" href='@asset("css/disclaimer.css")' />
+</HeadContent>
+
 <Router AppAssembly="typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
