@@ -43,7 +43,7 @@ else
                 }
                 else
                 {
-                    <option value="">System default</option>
+                    <option value="">Choose Device</option>
                     @foreach (var camera in _cameras)
                     {
                         <option value="@camera.DeviceId">@camera.Label</option>
@@ -73,7 +73,7 @@ else
                 }
                 else
                 {
-                    <option value="">System default</option>
+                    <option value="">Choose Device</option>
                     @foreach (var microphone in _microphones)
                     {
                         <option value="@microphone.DeviceId">@microphone.Label</option>
@@ -110,7 +110,7 @@ else
         </div>
 
         <div class="settings-actions">
-            <button type="submit" disabled="@_isSaving">Save preferences</button>
+            <button type="submit" disabled="@(_isSaving || !CanSavePreferences)">Save preferences</button>
         </div>
     </EditForm>
 
@@ -161,7 +161,7 @@ else
 
 @code
 {
-    private const string DevicePlaceholderText = "choose device";
+    private const string DevicePlaceholderText = "Choose Device";
     private record MediaDeviceInfo(string DeviceId, string Kind, string Label);
     private record LanguageOption(string Code, string DisplayName);
     private sealed class PreferencesModel
@@ -441,6 +441,10 @@ else
     
     private bool IsMicrophoneNotConfigured => string.IsNullOrWhiteSpace(_formModel.MicrophoneDeviceId) && _microphones.Count > 0;
 
+    private bool CanSavePreferences =>
+        !string.IsNullOrWhiteSpace(_formModel.CameraDeviceId) &&
+        !string.IsNullOrWhiteSpace(_formModel.MicrophoneDeviceId);
+
     private string CertificateFileName
         => string.IsNullOrWhiteSpace(_httpsCertificateInfo.SuggestedFileName)
             ? "https-certificate.pem"
@@ -541,6 +545,12 @@ else
 
     private async Task SavePreferences()
     {
+        if (!CanSavePreferences)
+        {
+            ToastService.ShowWarning("Choose a specific camera and microphone before saving.");
+            return;
+        }
+
         _isSaving = true;
         var deviceSaveSuccess = false;
         var serverSaveSuccess = false;
