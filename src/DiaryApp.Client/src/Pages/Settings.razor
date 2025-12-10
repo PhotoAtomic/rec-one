@@ -8,6 +8,7 @@
 @using System
 @using System.Collections.Generic
 @using System.Linq
+@using System.Text
 @using DiaryApp.Shared.Abstractions
 @using Microsoft.JSInterop
 
@@ -323,6 +324,7 @@ else
     private bool _isRequestingPermissions;
     private bool _permissionsRequested;
     private bool _deviceAccessGranted = true;
+    private int _permissionFailureCount;
     private string? _savedCameraLabel;
     private string? _savedMicrophoneLabel;
     private List<MediaDeviceInfo> _cameras = new();
@@ -511,6 +513,7 @@ else
             
             if (result.Success)
             {
+                _permissionFailureCount = 0;
                 // Permissions granted, refresh device list
                 await RefreshDevices(requestPermissions: false);
                 
@@ -531,18 +534,20 @@ else
             else
             {
                 _permissionsRequested = false;
+                _permissionFailureCount++;
                 if (showToast)
                 {
-                    ToastService.ShowError($"Permission denied: {result.Error}. Please check your browser settings.");
+                    ToastService.ShowError(ComposePermissionErrorMessage(result.Error));
                 }
             }
         }
         catch (Exception ex)
         {
             _permissionsRequested = false;
+            _permissionFailureCount++;
             if (showToast)
             {
-                ToastService.ShowError($"Failed to request permissions: {ex.Message}");
+                ToastService.ShowError(ComposePermissionErrorMessage(ex.Message));
             }
         }
         finally
@@ -700,5 +705,16 @@ else
         public bool Success { get; set; }
         public string? Error { get; set; }
         public bool AudioOnly { get; set; }
+    }
+
+    private string ComposePermissionErrorMessage(string? error)
+    {
+        var builder = new StringBuilder();
+        builder.Append($"Permission denied: {error ?? "Unknown error"}. Please check your browser settings.");
+        if (_permissionFailureCount >= 3)
+        {
+            builder.Append(" Also verify your operating system privacy settings allow the browser to access the camera and microphone.");
+        }
+        return builder.ToString();
     }
 }
