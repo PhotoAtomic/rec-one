@@ -30,13 +30,48 @@
 <Toast />
 
 @code {
-    private UserStatusDto _status = new(false, null, false);
+    private UserStatusDto _status = new(false, null, false, null);
     private bool _statusLoaded;
+    private bool _autoLoginTriggered;
 
     protected override async Task OnInitializedAsync()
     {
         _status = await AuthStatusService.GetStatusAsync();
+
+        if (TryAutoLogin(_status))
+        {
+            return;
+        }
+
         _statusLoaded = true;
+    }
+
+    private bool TryAutoLogin(UserStatusDto status)
+    {
+        if (_autoLoginTriggered)
+        {
+            return false;
+        }
+
+        if (!status.AuthenticationEnabled || status.IsAuthenticated)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(status.LastProvider))
+        {
+            return false;
+        }
+
+        if (IsLoginPage())
+        {
+            return false;
+        }
+
+        _autoLoginTriggered = true;
+        var target = $"/login/{status.LastProvider.ToLowerInvariant()}";
+        NavigationManager.NavigateTo(target, forceLoad: true);
+        return true;
     }
 
     private bool IsLoginPage()

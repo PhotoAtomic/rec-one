@@ -24,10 +24,140 @@
     <meta name="twitter:image" content="https://rec-one.dev/images/og-preview.png" />
     
     <base href="/" />
+    <meta name="theme-color" content="#10131a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rec-One" />
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --vd-bg: #10131a;
+            --vd-card: #161b29;
+            --vd-accent: #1e88e5;
+            --vd-accent-soft: rgba(30, 136, 229, 0.35);
+        }
+
+        body {
+            margin: 0;
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at top, rgba(30, 136, 229, 0.12), transparent 55%), var(--vd-bg);
+            color: #f0f4ff;
+            min-height: 100vh;
+        }
+
+        #app {
+            min-height: 100vh;
+        }
+
+        .splash-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            min-height: 100vh;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        .splash-logo {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #e3f2fd;
+        }
+
+        .splash-tagline {
+            margin: 0.75rem 0 2rem;
+            color: rgba(240, 244, 255, 0.75);
+            max-width: 26rem;
+        }
+
+        .splash-indicator {
+            display: grid;
+            place-items: center;
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: var(--vd-card);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+            position: relative;
+        }
+
+        .splash-spinner {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.18);
+            border-top-color: var(--vd-accent);
+            animation: splash-spin 0.9s linear infinite;
+        }
+
+        .splash-progress-bar {
+            margin-top: 1.75rem;
+            width: 180px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .splash-progress-bar::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, transparent, var(--vd-accent), transparent);
+            animation: splash-glow 1.8s ease-in-out infinite;
+        }
+
+        .splash-caption {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(240, 244, 255, 0.6);
+        }
+
+        @keyframes splash-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes splash-glow {
+            0% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <div id="app">Loading...</div>
+    <div id="app">
+        <div class="splash-screen" role="status" aria-live="polite">
+            <div class="splash-logo">Rec-One</div>
+            <p class="splash-tagline">Preparing your diary workspace...</p>
+            <div class="splash-indicator">
+                <div class="splash-spinner" aria-hidden="true"></div>
+            </div>
+            <div class="splash-progress-bar" aria-hidden="true"></div>
+            <div class="splash-caption">Loading</div>
+        </div>
+    </div>
     <div id="blazor-error-ui" style="display: none;">
         An error has occurred.
         <a href="#" class="reload">Reload</a>

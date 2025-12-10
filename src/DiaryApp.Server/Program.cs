@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using DiaryApp.Server;
 using DiaryApp.Server.Processing;
 using DiaryApp.Server.Serialization;
@@ -19,7 +20,10 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
+const string LastProviderCookieName = "DiaryApp.LastProvider";
+
 var builder = WebApplication.CreateBuilder(args);
+var useSecureCookies = !builder.Environment.IsDevelopment();
 
 // Explicitly load user secrets in Development
 if (builder.Environment.IsDevelopment())
@@ -114,6 +118,19 @@ var authOptions = new OidcAuthenticationOptions
 };
 
 var authenticationConfigured = authOptions?.AnyProviderConfigured() == true;
+var configuredProviders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+if (authOptions is not null)
+{
+    if (authOptions.Microsoft.IsConfigured())
+    {
+        configuredProviders.Add("Microsoft");
+    }
+
+    if (authOptions.Google.IsConfigured())
+    {
+        configuredProviders.Add("Google");
+    }
+}
 
 // Debug logging - Check raw configuration values
 Console.WriteLine($"=== AUTHENTICATION CONFIGURATION ===");
@@ -169,6 +186,7 @@ if (authenticationConfigured)
             {
                 OnTicketReceived = context =>
                 {
+                    RememberLastProvider(context.HttpContext, context.Scheme.Name, useSecureCookies);
                     var identity = (ClaimsIdentity?)context.Principal?.Identity;
                     if (identity is not null)
                     {
@@ -226,6 +244,7 @@ if (authenticationConfigured)
             {
                 OnTicketReceived = context =>
                 {
+                    RememberLastProvider(context.HttpContext, context.Scheme.Name, useSecureCookies);
                     var identity = (ClaimsIdentity?)context.Principal?.Identity;
                     if (identity is not null)
                     {
@@ -276,10 +295,11 @@ app.UseBlazorFrameworkFiles();
 app.MapStaticAssets();
 app.UseRouting();
 
-// Disable caching for API responses to avoid stale HTML being reused for JSON endpoints
+// Disable caching for API and authentication responses to avoid stale HTML being reused for JSON endpoints
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api"))
+    if (context.Request.Path.StartsWithSegments("/api") ||
+        context.Request.Path.StartsWithSegments("/authentication"))
     {
         context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
         context.Response.Headers.Pragma = "no-cache";
@@ -671,7 +691,14 @@ app.MapGet("/authentication/status", (HttpContext context) =>
       var principal = context.User;
       var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
       var name = isAuthenticated ? principal?.Identity?.Name : null;
-      var payload = new UserStatusDto(isAuthenticated, name, authenticationConfigured);
+      string? lastProvider = null;
+      if (configuredProviders.Count > 0 &&
+          context.Request.Cookies.TryGetValue(LastProviderCookieName, out var provider) &&
+          configuredProviders.Contains(provider))
+      {
+          lastProvider = provider;
+      }
+      var payload = new UserStatusDto(isAuthenticated, name, authenticationConfigured, lastProvider);
       return Results.Json(payload, DiaryAppJsonSerializerContext.Default.UserStatusDto);
   }).AllowAnonymous();
 
@@ -742,11 +769,37 @@ if (authenticationConfigured)
         // Do not attempt to sign out from OIDC providers (Microsoft/Google)
         // as they require end session endpoints which may not be configured
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        ForgetLastProvider(context);
         return Results.Redirect("/");
     }).RequireAuthorization();
 }
 
 app.Run();
+
+static void RememberLastProvider(HttpContext context, string? provider, bool secureCookies)
+{
+    if (string.IsNullOrWhiteSpace(provider))
+    {
+        return;
+    }
+
+    var options = new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = secureCookies,
+        SameSite = SameSiteMode.Lax,
+        IsEssential = true,
+        Expires = DateTimeOffset.UtcNow.AddDays(30),
+        Path = "/"
+    };
+
+    context.Response.Cookies.Append(LastProviderCookieName, provider, options);
+}
+
+static void ForgetLastProvider(HttpContext context)
+{
+    context.Response.Cookies.Delete(LastProviderCookieName, new CookieOptions { Path = "/" });
+}
 
 static long ParseHeaderLong(IHeaderDictionary headers, string key, long defaultValue)
     => headers.TryGetValue(key, out var values) && long.TryParse(values, out var parsed)

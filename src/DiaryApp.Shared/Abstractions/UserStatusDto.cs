@@ -1,3 +1,3 @@
 namespace DiaryApp.Shared.Abstractions;
 
-public sealed record UserStatusDto(bool IsAuthenticated, string? Name, bool AuthenticationEnabled);
+public sealed record UserStatusDto(bool IsAuthenticated, string? Name, bool AuthenticationEnabled, string? LastProvider);

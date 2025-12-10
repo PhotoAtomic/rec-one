@@ -27,7 +27,7 @@ public sealed class AuthenticationStatusService
         }
         catch
         {
-            _cachedStatus = new UserStatusDto(false, null, false);
+            _cachedStatus = new UserStatusDto(false, null, false, null);
         }
         finally
         {
