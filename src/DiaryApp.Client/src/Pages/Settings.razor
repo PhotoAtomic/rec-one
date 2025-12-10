@@ -29,11 +29,34 @@
 }
 else
 {
+    if (!_deviceAccessGranted)
+    {
+        <div class="settings-warning">
+            <p>We couldn't access your media devices. This may be because:</p>
+            <ul>
+                <li>Browser permissions haven't been granted yet</li>
+                <li>No camera or microphone is connected</li>
+                <li>Another application is using the devices</li>
+            </ul>
+            <button type="button" @onclick="RequestPermissions" disabled="@_isRequestingPermissions">
+                @if (_isRequestingPermissions)
+                {
+                    <span class="button-spinner" aria-hidden="true"></span>
+                    <span>Requesting access...</span>
+                }
+                else
+                {
+                    <span>Grant Camera & Microphone Access</span>
+                }
+            </button>
+        </div>
+    }
+
     <EditForm Model="_formModel" OnValidSubmit="SavePreferences">
         <div class="settings-section">
             <label for="cameraSelect">Preferred webcam</label>
             <select id="cameraSelect" 
-                    class="@(IsCameraNotConfigured ? "field-warning" : "")"
+                    class="@((IsCameraNotConfigured || ShouldHighlightDeviceSelection) ? "field-warning" : "")"
                     @bind="_formModel.CameraDeviceId"
                     @onfocus="OnDeviceSelectFocus"
                     @onclick="OnDeviceSelectFocus"
@@ -64,7 +87,7 @@ else
         <div class="settings-section">
             <label for="microphoneSelect">Preferred microphone</label>
             <select id="microphoneSelect"
-                    class="@(IsMicrophoneNotConfigured ? "field-warning" : "")"
+                    class="@((IsMicrophoneNotConfigured || ShouldHighlightDeviceSelection) ? "field-warning" : "")"
                     @bind="_formModel.MicrophoneDeviceId"
                     @onfocus="OnDeviceSelectFocus"
                     @onclick="OnDeviceSelectFocus"
@@ -134,29 +157,6 @@ else
                     </svg>
                 </a>
             </div>
-        </div>
-    }
-
-    if (!_deviceAccessGranted)
-    {
-        <div class="settings-warning">
-            <p>We couldn't access your media devices. This may be because:</p>
-            <ul>
-                <li>Browser permissions haven't been granted yet</li>
-                <li>No camera or microphone is connected</li>
-                <li>Another application is using the devices</li>
-            </ul>
-            <button type="button" @onclick="RequestPermissions" disabled="@_isRequestingPermissions">
-                @if (_isRequestingPermissions)
-                {
-                    <span class="button-spinner" aria-hidden="true"></span>
-                    <span>Requesting access...</span>
-                }
-                else
-                {
-                    <span>Grant Camera & Microphone Access</span>
-                }
-            </button>
         </div>
     }
 }
@@ -446,6 +446,8 @@ else
     private bool CanSavePreferences =>
         !string.IsNullOrWhiteSpace(_formModel.CameraDeviceId) &&
         !string.IsNullOrWhiteSpace(_formModel.MicrophoneDeviceId);
+
+    private bool ShouldHighlightDeviceSelection => !_deviceAccessGranted;
 
     private string CertificateFileName
         => string.IsNullOrWhiteSpace(_httpsCertificateInfo.SuggestedFileName)

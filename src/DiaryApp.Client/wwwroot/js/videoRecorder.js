@@ -496,3 +496,7 @@ export async function getRecording() {
     recordedChunks = [];
     return new Uint8Array(buffer);
 }
+
+export function supportsScreenCapture() {
+    return typeof navigator?.mediaDevices?.getDisplayMedia === 'function';
+}

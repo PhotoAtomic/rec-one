@@ -2,6 +2,7 @@
 @using Microsoft.JSInterop
 @using System.IO
 @using DiaryApp.Client.Services
+@using Microsoft.AspNetCore.Components.Routing
 @inject IVideoCaptureService VideoCapture
 @inject VideoUploadService UploadService
 @inject IOutgoingUploadQueue OutgoingQueue
@@ -50,11 +51,14 @@
             else if (_isRecording)
             {
                 <!-- Recording state: Switch input + Stop -->
-                <button type="button"
-                        class="secondary"
-                        @onclick="ToggleCaptureMode">
-                    @(_captureScreen ? "Use Webcam" : "Capture Screen")
-                </button>
+                @if (_canCaptureScreen)
+                {
+                    <button type="button"
+                            class="secondary"
+                            @onclick="ToggleCaptureMode">
+                        @(_captureScreen ? "Use Webcam" : "Capture Screen")
+                    </button>
+                }
                 <button @onclick="StopRecording">Stop</button>
             }
             else if (_hasRecording)
@@ -116,6 +120,21 @@
     private IJSObjectReference? _uiModule;
     private IJSObjectReference? _permissionsModule;
     private bool _detailsExpanded = false;
+    private bool _canCaptureScreen;
+    private IJSObjectReference? _videoModule;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await EnsureScreenCaptureCapabilityAsync();
+        }
+    }
 
     private void ToggleDetails()
     {
@@ -147,6 +166,11 @@
 
         _hasRecording = false;
         _isRecording = true;
+
+        if (_captureScreen && !_canCaptureScreen)
+        {
+            _captureScreen = false;
+        }
         
         try
         {
@@ -360,8 +384,37 @@
         _uiModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/uiHelpers.js");
     }
 
+    private async Task EnsureScreenCaptureCapabilityAsync()
+    {
+        var supported = false;
+        try
+        {
+            _videoModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/videoRecorder.js");
+            supported = await _videoModule.InvokeAsync<bool>("supportsScreenCapture");
+        }
+        catch (Exception ex)
+        {
+            supported = false;
+        }
+
+        if (_canCaptureScreen == supported)
+        {
+            return;
+        }
+
+        _canCaptureScreen = supported;
+        if (!_canCaptureScreen && _captureScreen)
+        {
+            _captureScreen = false;
+        }
+
+        StateHasChanged();
+    }
+
     public async ValueTask DisposeAsync()
     {
+        Navigation.LocationChanged -= HandleLocationChanged;
+
         if (_uiModule is not null)
         {
             await _uiModule.DisposeAsync();
@@ -370,10 +423,20 @@
         {
             await _permissionsModule.DisposeAsync();
         }
+        if (_videoModule is not null)
+        {
+            await _videoModule.DisposeAsync();
+        }
     }
 
     private async Task ToggleCaptureMode()
     {
+        if (!_canCaptureScreen)
+        {
+            _statusMessage = "Screen capture is not supported on this device.";
+            return;
+        }
+
         var nextMode = !_captureScreen;
         if (_isRecording)
         {
@@ -396,6 +459,36 @@
             _statusMessage = _captureScreen
                 ? "Screen capture enabled. Start recording to capture your display."
                 : "Webcam capture enabled.";
+        }
+    }
+
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        if (!_isRecording)
+        {
+            return;
+        }
+
+        await StopAndDiscardRecordingAsync();
+    }
+
+    private async Task StopAndDiscardRecordingAsync()
+    {
+        try
+        {
+            await VideoCapture.StopRecordingAsync();
+        }
+        catch
+        {
+            // Ignore stop failures during navigation
+        }
+        finally
+        {
+            await InvokeAsync(() =>
+            {
+                CancelRecording();
+                StateHasChanged();
+            });
         }
     }
 

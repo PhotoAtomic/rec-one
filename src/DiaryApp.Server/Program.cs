@@ -272,7 +272,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+//app.UseStaticFiles();
+app.MapStaticAssets();
 app.UseRouting();
 
 // Disable caching for API responses to avoid stale HTML being reused for JSON endpoints
