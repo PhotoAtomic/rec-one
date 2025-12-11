@@ -7,9 +7,9 @@
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
 		<BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
-		<Version>1.6.3</Version>
-		<AssemblyVersion>1.6.3.*</AssemblyVersion>
-		<FileVersion>1.6.3.0</FileVersion>
+		<Version>1.6.4</Version>
+		<AssemblyVersion>1.6.4.*</AssemblyVersion>
+		<FileVersion>1.6.4.0</FileVersion>
 		<Deterministic>false</Deterministic>
 		
 

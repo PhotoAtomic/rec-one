@@ -31,6 +31,8 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddUserSecrets<Program>();
 }
 
+var gitHubRepositoryUrl = builder.Configuration["GitHub repository"];
+
 // Debug: Show all configuration sources
 Console.WriteLine("=== CONFIGURATION SOURCES ===");
 foreach (var source in ((IConfigurationRoot)builder.Configuration).Providers)
@@ -698,7 +700,7 @@ app.MapGet("/authentication/status", (HttpContext context) =>
       {
           lastProvider = provider;
       }
-      var payload = new UserStatusDto(isAuthenticated, name, authenticationConfigured, lastProvider);
+      var payload = new UserStatusDto(isAuthenticated, name, authenticationConfigured, lastProvider, gitHubRepositoryUrl);
       return Results.Json(payload, DiaryAppJsonSerializerContext.Default.UserStatusDto);
   }).AllowAnonymous();
 

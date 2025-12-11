@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
+using System.Security.Claims;
+using DiaryApp.Shared;
 using DiaryApp.Shared.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -131,8 +133,14 @@ public sealed class ChunkedUploadStore
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext?.User?.Identity?.IsAuthenticated == true)
         {
-            var name = httpContext.User.Identity?.Name;
-            return SanitizeSegment(string.IsNullOrWhiteSpace(name) ? "user" : name);
+            var principal = httpContext.User;
+            var identifier =
+                principal.FindFirst(DiaryAppClaimTypes.UserId)?.Value ??
+                principal.FindFirstValue(ClaimTypes.Upn) ??
+                principal.FindFirstValue(ClaimTypes.Email) ??
+                principal.Identity?.Name;
+
+            return SanitizeSegment(string.IsNullOrWhiteSpace(identifier) ? "user" : identifier);
         }
 
         return DefaultUserSegment;

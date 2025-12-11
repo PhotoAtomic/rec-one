@@ -50,6 +50,17 @@
         </div>
     }
     <div class="nav-version-area">
+        @if (_statusLoaded && !string.IsNullOrWhiteSpace(_status.GitHubRepositoryUrl))
+        {
+            <a class="nav-github-button"
+               href="@_status.GitHubRepositoryUrl"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="Open GitHub repository"
+               aria-label="Open GitHub repository">
+                <img src='@asset("images/github-mark-white.svg")' alt="GitHub" />
+            </a>
+        }
         @if (_statusLoaded && _status.AuthenticationEnabled)
         {
             <button class="nav-disclaimer-button" @onclick="ShowDisclaimer" title="Show disclaimer">
@@ -66,7 +77,7 @@
 <DisclaimerModal @ref="_disclaimerModal" AutoShow="false" AllowDismiss="true" />
 
 @code {
-    private UserStatusDto _status = new(false, null, false, null);
+    private UserStatusDto _status = new(false, null, false, null, null);
     private bool _statusLoaded;
     private DisclaimerModal? _disclaimerModal;
     private string _version = "";
@@ -81,7 +92,7 @@
         _status = await AuthStatusService.GetStatusAsync();
         _statusLoaded = true;
         var clientAssembly = typeof(App).Assembly;
-        var version = clientAssembly.GetName().Version;
+        var version = clientAssembly.GetName(). Version;
         var versionString = version != null
             ? $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}"
             : "1.0.0.0";
