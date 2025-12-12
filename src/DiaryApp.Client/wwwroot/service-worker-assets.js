@@ -1,3 +1,0 @@
-self.assetsManifest = {
-    assets: []
-};
